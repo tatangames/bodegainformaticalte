@@ -167,8 +167,10 @@
                                     <div class="col-md-4">
                                         <div class="form-group">
                                             <label>Precio (4 decimales) <span class="text-danger">*</span></label>
-                                            <input type="number" id="precio-producto" min="0" max="9000000"
-                                                   step="0.0001" class="form-control" autocomplete="off" placeholder="0.0000">
+                                            <input type="text" id="precio-producto" inputmode="decimal"
+                                                   class="form-control" autocomplete="off" placeholder="0.0000"
+                                                   onkeypress="return validarDecimal(event, this)"
+                                                   oninput="limitarDecimales(this, 4)">
                                         </div>
                                     </div>
                                     <div class="col-md-4">
@@ -270,6 +272,47 @@
                 $('.droplista').hide();
             });
         });
+
+        // Solo permite números y un único punto decimal
+        function validarDecimal(e, input) {
+            var char = String.fromCharCode(e.which);
+            var valor = input.value;
+
+            if (e.which === 0) return true; // teclas especiales (backspace, etc)
+
+            if (char === '.') {
+                // Solo un punto permitido
+                if (valor.indexOf('.') !== -1) return false;
+                return true;
+            }
+
+            if (!/[0-9]/.test(char)) return false;
+
+            return true;
+        }
+
+        // Limita la cantidad de decimales mientras escribe
+        function limitarDecimales(input, max) {
+            var valor = input.value;
+
+            // Eliminar cualquier caracter que no sea número o punto
+            valor = valor.replace(/[^0-9.]/g, '');
+
+            // Evitar más de un punto
+            var partes = valor.split('.');
+            if (partes.length > 2) {
+                valor = partes[0] + '.' + partes.slice(1).join('');
+                partes = valor.split('.');
+            }
+
+            // Limitar decimales
+            if (partes[1] && partes[1].length > max) {
+                partes[1] = partes[1].substring(0, max);
+                valor = partes[0] + '.' + partes[1];
+            }
+
+            input.value = valor;
+        }
 
         // ── Modal ─────────────────────────────────────────────────────
         function abrirModal() {

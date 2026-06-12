@@ -16,7 +16,7 @@ class Entradas extends Model
         'd_proveedor',
         'fecha',
         'descripcion',
-        'factura',
+        'lote',
     ];
 
     public function detalle()

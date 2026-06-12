@@ -189,6 +189,8 @@ class RepuestosController extends Controller
     // GUARDAR ENTRADAS
     public function guardarEntrada(Request $request)
     {
+        Log::info($request->all());
+
         $validator = Validator::make($request->all(), [
             'fecha'      => 'required|date',
             'tipocompra' => 'required',
@@ -213,7 +215,7 @@ class RepuestosController extends Controller
             $entrada->id_proveedor = $request->proveedor;
             $entrada->fecha         = $request->fecha;
             $entrada->descripcion   = $request->descripcion;
-            $entrada->factura          = $request->factura; // lote es el campo varchar(100)
+            $entrada->lote          = $request->factura; // lote es el campo varchar(100)
             $entrada->save();
 
             foreach ($datosContenedor as $fila) {
