@@ -15,14 +15,13 @@ class ControlController extends Controller
         if($user->hasRole('admin')){
             return redirect()->route('admin.roles.index');
         }
-
         // Inventario
         else  if($user->hasRole('inventario')){
             return redirect()->route('admin.materiales.index');
         }
-
-        else  if($user->hasRole('auditora')){
-            return redirect()->route('admin.entrada.reporte.index');
+        // Reportes
+        else  if($user->hasRole('reportes')){
+            return redirect()->route('admin.reporte.generales.index');
         }
 
         return redirect()->route('no.permisos.index');

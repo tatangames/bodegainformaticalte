@@ -18,6 +18,10 @@ Route::get('/', [LoginController::class,'vistaLoginForm'])->name('login.admin');
 Route::post('/login', [LoginController::class, 'login']);
 Route::post('/logout', [LoginController::class, 'logout'])->name('admin.logout');
 
+// --- REDIRECCIONAMIENTO A OTROS SISTEMAS ---
+Route::get('/redireccionamiento/sistemas', [LoginController::class,'vistaRedireccionOtrosSistemas'])->name('admin.redireccionamiento.index');
+
+
 Route::middleware('auth:admin')->group(function () {
 
     // --- ROLES ----.
@@ -141,12 +145,13 @@ Route::middleware('auth:admin')->group(function () {
     Route::post('/admin/historial/salidas/eliminar',    [HistorialController::class, 'eliminarSalida']);
     Route::post('/admin/historial/salidas/detalle', [HistorialController::class, 'detalleSalida']);
 
-
-
-
+    // --- REPORTES ---
     Route::get('/admin/reporte/generales', [ReportesController::class,'vistaReporteGenerales'])->name('admin.reporte.generales.index');
     Route::get('/admin/reporte/pdf/inventario', [ReportesController::class,'generarPDFExistencias']);
     Route::get('/admin/bodega/reportespdf/inicial/final/{desde}/{hasta}', [ReportesController::class, 'reportePDFInicialPorPeriodos']);
+
+
+
 
 
 

@@ -13,7 +13,7 @@ class LoginController extends Controller
     public static function middleware(): array
     {
         return [
-            new Middleware('guest', except: ['logout']),
+            new Middleware('guest', except: ['logout',]),
         ];
     }
 
@@ -67,5 +67,12 @@ class LoginController extends Controller
         request()->session()->regenerateToken();
 
         return redirect()->route('login.admin');
+    }
+
+
+
+    public function vistaRedireccionOtrosSistemas()
+    {
+        return view('backend.admin.reportes.global.vistaredireccionsistema');
     }
 }

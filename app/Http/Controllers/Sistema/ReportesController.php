@@ -29,7 +29,7 @@ class ReportesController extends Controller
 
     public function vistaReporteGenerales()
     {
-        return view('backend.reportes.vistareportegenerales');
+        return view('backend.admin.reportes.vistareportegenerales');
     }
 
 
