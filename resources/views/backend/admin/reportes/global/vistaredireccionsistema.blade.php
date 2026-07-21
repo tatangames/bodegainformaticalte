@@ -280,6 +280,18 @@
         </a>
 
 
+        {{-- Sistema 11 --}}
+        <a href="http://190.86.196.105/petreos.com/" target="_blank" rel="noopener noreferrer" class="sys-card">
+            <div class="sys-icon ic-green">
+                <i class="ti ti-settings" aria-hidden="true"></i>
+            </div>
+            <p class="sys-name">Planta Procesador de Petreos</p>
+            <span class="sys-link">
+                <i class="ti ti-external-link"></i> Ingresar
+            </span>
+        </a>
+
+
     </div>
 
 
