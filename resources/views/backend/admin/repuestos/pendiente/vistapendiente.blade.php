@@ -678,7 +678,7 @@
                 $('#tabla-pendientes tbody').html(
                     '<tr id="fila-vacia"><td colspan="5" class="text-center text-muted py-4">' +
                     '<i class="fas fa-check-circle fa-2x mb-2 text-success d-block"></i>' +
-                    'No hay ítems pendientes</td></tr>'
+                    'No hay ítems pendientes.</td></tr>'
                 );
             }
         }
