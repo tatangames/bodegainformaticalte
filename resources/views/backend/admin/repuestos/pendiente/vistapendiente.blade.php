@@ -259,7 +259,6 @@
                         </div>
                     </div>
 
-
                     <div class="form-group">
                         <label>Observación: <span style="color: red">*</span> </label>
                         <textarea class="form-control" id="editar-observacion" rows="2" maxlength="500"></textarea>
@@ -291,6 +290,43 @@
                         </span>
                     </div>
                 </div>
+
+                {{-- ══ Barra de búsqueda ══ --}}
+                <div class="card-body pb-0 pt-3 border-bottom">
+                    <div class="row align-items-center">
+                        <div class="col-md-5 col-sm-8 col-12 mb-2">
+                            <div class="input-group input-group-sm">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text bg-dark border-dark text-white">
+                                        <i class="fas fa-search"></i>
+                                    </span>
+                                </div>
+                                <input
+                                    type="text"
+                                    id="buscador-pendientes"
+                                    class="form-control border-dark"
+                                    placeholder="Buscar por material, fecha, solicitud o departamento..."
+                                    autocomplete="off"
+                                >
+                                <div class="input-group-append">
+                                    <button
+                                        class="btn btn-sm btn-outline-secondary"
+                                        type="button"
+                                        id="btn-limpiar-busqueda"
+                                        title="Limpiar búsqueda"
+                                        style="display:none;"
+                                    >
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-sm-4 col-12 mb-2">
+                            <small class="text-muted" id="resultado-busqueda"></small>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-bordered table-hover mb-0" id="tabla-pendientes">
@@ -305,8 +341,10 @@
                             </thead>
                             <tbody>
                             @forelse($pendientes as $index => $item)
-                                <tr id="fila-{{ $item->id_salida_detalle }}">
-                                    <td>{{ $index + 1 }}</td>
+                                <tr id="fila-{{ $item->id_salida_detalle }}"
+                                    class="fila-pendiente"
+                                    data-busqueda="{{ strtolower($item->material) }} {{ $item->fecha ? date('d-m-Y', strtotime($item->fecha)) : '' }} {{ strtolower($item->numero_solicitud ?? '') }} {{ strtolower($item->departamento ?? '') }}">
+                                    <td class="col-numero">{{ $index + 1 }}</td>
                                     <td>{{ $item->fecha ? date('d-m-Y', strtotime($item->fecha)) : '—' }}</td>
                                     <td>{{ $item->material }}</td>
                                     <td class="text-center">{{ $item->cantidad_salida }}</td>
@@ -343,6 +381,12 @@
                             @endforelse
                             </tbody>
                         </table>
+
+                        {{-- Aviso "sin resultados" para búsqueda --}}
+                        <div id="sin-resultados-busqueda" class="text-center text-muted py-4" style="display:none;">
+                            <i class="fas fa-search fa-2x mb-2 d-block"></i>
+                            No se encontraron resultados para "<span id="texto-sin-resultado"></span>"
+                        </div>
                     </div>
                 </div>
             </div>
@@ -377,7 +421,55 @@
                 dropdownParent: $('#modalEditar'),
                 language: { noResults: function () { return 'No encontrado'; } }
             });
+
+            // ── Buscador: escucha en tiempo real ──
+            $('#buscador-pendientes').on('input', filtrarTabla);
+            $('#btn-limpiar-busqueda').on('click', limpiarBusqueda);
         });
+
+        // ══ BUSCADOR ══════════════════════════════════════════════════
+        function filtrarTabla() {
+            var termino = $('#buscador-pendientes').val().trim().toLowerCase();
+            var $filas  = $('#tabla-pendientes tbody tr.fila-pendiente');
+
+            $('#btn-limpiar-busqueda').toggle(termino.length > 0);
+
+            var visibles = 0;
+
+            $filas.each(function () {
+                var $fila = $(this);
+                var texto = $fila.data('busqueda') ? String($fila.data('busqueda')).toLowerCase() : '';
+                var coincide = termino === '' || texto.indexOf(termino) !== -1;
+
+                $fila.toggle(coincide);
+                if (coincide) visibles++;
+            });
+
+            // Renumerar filas visibles
+            var numero = 1;
+            $filas.filter(':visible').each(function () {
+                $(this).find('.col-numero').text(numero++);
+            });
+
+            // Mensaje sin resultados
+            if (termino.length > 0 && visibles === 0) {
+                $('#sin-resultados-busqueda').show();
+                $('#texto-sin-resultado').text(termino);
+            } else {
+                $('#sin-resultados-busqueda').hide();
+            }
+
+            // Info resultados
+            if (termino.length > 0) {
+                $('#resultado-busqueda').text(visibles + ' resultado' + (visibles !== 1 ? 's' : '') + ' encontrado' + (visibles !== 1 ? 's' : ''));
+            } else {
+                $('#resultado-busqueda').text('');
+            }
+        }
+
+        function limpiarBusqueda() {
+            $('#buscador-pendientes').val('').trigger('input').focus();
+        }
 
         // ── Abrir modal agregar entrega ───────────────────────────────
         function abrirModalEntrega(idSalidaDetalle, material) {
@@ -411,7 +503,7 @@
             formData.append('cantidad',          cantidad);
             formData.append('fecha_entrega',     fecha);
             formData.append('observacion',       observacion);
-            formData.append('numero_solicitud',       numerosolicitud);
+            formData.append('numero_solicitud',  numerosolicitud);
             openLoading();
 
             axios.post(urlAdmin + '/admin/pendientes/salida-parcial', formData)
@@ -456,6 +548,7 @@
                             $('#fila-' + idSalidaDetalle).fadeOut(400, function () {
                                 $(this).remove();
                                 actualizarContador();
+                                filtrarTabla();
                             });
                             toastr.success('Ítem finalizado');
                         } else {
@@ -470,11 +563,9 @@
         }
 
         // ── Ver detalle ───────────────────────────────────────────────
-        // Solo recibe el id — el material y demás vienen del servidor
         function verDetalle(idSalidaDetalle) {
             idSalidaDetalleActual = idSalidaDetalle;
 
-            // Resetear card info mientras carga
             $('#kit-material').text('—');
             $('#kit-tiposalida').text('—');
             $('#kit-cantidad').text('—');
@@ -505,7 +596,6 @@
                         return;
                     }
 
-                    // ── Rellenar card info del kit ────────────────────
                     var k = response.data.kit;
                     if (k) {
                         $('#kit-material').text(k.material         || '—');
@@ -517,7 +607,6 @@
                         $('#kit-descripcion').text(k.descripcion    || '—');
                     }
 
-                    // ── Rellenar tabla entregas ───────────────────────
                     var entregas = response.data.entregas;
                     $('#tabla-detalle-entregas tbody').empty();
                     $('#detalle-total').text('0');
@@ -578,10 +667,10 @@
                     }
 
                     var e = response.data.entrega;
-                    document.getElementById('editar-id-entrega').value  = e.id;
-                    document.getElementById('editar-cantidad').value    = e.cantidad;
-                    document.getElementById('editar-fecha').value       = e.fecha_entrega;
-                    document.getElementById('editar-observacion').value = e.observacion ?? '';
+                    document.getElementById('editar-id-entrega').value      = e.id;
+                    document.getElementById('editar-cantidad').value        = e.cantidad;
+                    document.getElementById('editar-fecha').value           = e.fecha_entrega;
+                    document.getElementById('editar-observacion').value     = e.observacion ?? '';
                     document.getElementById('editar-numerosolicitud').value = e.numero_solicitud ?? '';
                     $('#editar-departamento').val(e.id_departamento ?? '').trigger('change');
 
@@ -600,7 +689,7 @@
             var cantidad       = document.getElementById('editar-cantidad').value;
             var fecha          = document.getElementById('editar-fecha').value;
             var observacion    = document.getElementById('editar-observacion').value;
-            var solicitud    = document.getElementById('editar-numerosolicitud').value;
+            var solicitud      = document.getElementById('editar-numerosolicitud').value;
 
             if (!cantidad || parseInt(cantidad) <= 0) { toastr.error('Ingrese una cantidad válida'); return; }
             if (!fecha) { toastr.error('La fecha es requerida'); return; }
@@ -612,7 +701,7 @@
             formData.append('cantidad',        cantidad);
             formData.append('fecha_entrega',   fecha);
             formData.append('observacion',     observacion);
-            formData.append('solicitud',     solicitud);
+            formData.append('solicitud',       solicitud);
 
             openLoading();
 
@@ -671,7 +760,7 @@
 
         // ── Actualizar badge contador ─────────────────────────────────
         function actualizarContador() {
-            var filas = $('#tabla-pendientes tbody tr:visible').length;
+            var filas = $('#tabla-pendientes tbody .fila-pendiente').length;
             $('#badge-total').text(filas + ' pendientes');
 
             if (filas === 0) {
