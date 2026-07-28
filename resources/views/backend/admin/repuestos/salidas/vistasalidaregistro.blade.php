@@ -146,7 +146,7 @@
                                                 <span class="badge-global">global</span>
                                                 <small class="text-muted">(Opcional)</small>
                                             </label>
-                                            <select class="form-control" id="departamento_global">
+                                            <select class="form-control" id="departamento_global" style="width:100%">
                                                 <option value="">Sin departamento</option>
                                                 @foreach($arrayDepartamentos as $dep)
                                                     <option value="{{ $dep->id }}">{{ $dep->nombre }}</option>
@@ -330,17 +330,23 @@
 
         var seguroBuscador = true;
 
+        // Configuración Select2 reutilizable
+        var select2Config = {
+            theme: 'bootstrap-5',
+            dropdownParent: $('body'),
+            language: { noResults: function () { return 'No encontrado'; } }
+        };
+
         $(function () {
-            $('#select-tiposalida').select2({
-                theme: 'bootstrap-5',
-                dropdownParent: $('body'),
-                language: { noResults: function () { return 'No encontrado'; } }
-            });
+            $('#select-tiposalida').select2(select2Config);
 
             $('#select-tiposalida').on('change', function () {
                 var val = $(this).val();
                 $('#botonaddmaterial').prop('disabled', !val || val === '');
             });
+
+            // ── Select2 en departamento global ────────────────────────
+            $('#departamento_global').select2(select2Config);
 
             $(document).click(function () { $('.droplista').hide(); });
         });
@@ -458,9 +464,8 @@
             var fechaGlobal       = document.getElementById('fecha_global_item').value;
             var solicitudGlobal   = document.getElementById('numero_solicitud_global').value;
             var descripcionGlobal = document.getElementById('descripcion_global').value;
-            var deptoGlobalVal    = document.getElementById('departamento_global').value;
-            var deptoGlobalText   = document.getElementById('departamento_global')
-                .options[document.getElementById('departamento_global').selectedIndex].text;
+            var deptoGlobalVal    = $('#departamento_global').val();
+            var deptoGlobalText   = $('#departamento_global option:selected').text();
 
             var nombreTexto = document.getElementById('info-material').value;
 
@@ -518,9 +523,9 @@
                         'value="' + descripcionGlobal + '">' +
                         '</td>' +
 
-                        // Departamento por fila (pre-selecciona global)
+                        // Departamento por fila (se inicializa Select2 después del append)
                         '<td>' +
-                        '<select name="departamentoArray[]" class="form-control form-control-sm">' +
+                        '<select name="departamentoArray[]" class="form-control form-control-sm select2-depto" style="width:100%">' +
                         deptoOptions +
                         '</select>' +
                         '</td>' +
@@ -541,7 +546,11 @@
                         '</button>' +
                         '</td>' +
                         '</tr>';
+
                     $('#matriz tbody').append(fila);
+
+                    // ── Inicializar Select2 en el select recién agregado ──
+                    $('#matriz tbody tr:last-child select.select2-depto').select2(select2Config);
                 }
             }
 
@@ -604,7 +613,7 @@
             var fechaGlobal       = document.getElementById('fecha_global_item').value;
             var solicitudGlobal   = document.getElementById('numero_solicitud_global').value;
             var descripcionGlobal = document.getElementById('descripcion_global').value.trim();
-            var deptoGlobal       = document.getElementById('departamento_global').value;
+            var deptoGlobal       = $('#departamento_global').val();
 
             // ── Validar fecha obligatoria por fila ────────────────────────────────
             var sinFecha       = false;
@@ -747,8 +756,7 @@
                             confirmButtonColor: '#d33',
                             confirmButtonText: 'Entendido'
                         });
-                    }
-                    else {
+                    } else {
                         toastr.error('Error al guardar');
                     }
                 })
@@ -759,7 +767,11 @@
 
         // ── Utilidades ────────────────────────────────────────────────
         function borrarFila(btn) {
-            $(btn).closest('tr').remove();
+            var $fila = $(btn).closest('tr');
+            // Destruir Select2 antes de remover la fila (evita memory leaks)
+            var $sel = $fila.find('select[name="departamentoArray[]"]');
+            if ($sel.data('select2')) $sel.select2('destroy');
+            $fila.remove();
             renumerarFilas();
         }
 
