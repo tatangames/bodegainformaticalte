@@ -43,6 +43,11 @@
         #matriz { table-layout: auto; word-break: break-word; width: 100%; }
         #matriz-busqueda { table-layout: fixed; }
         *:focus { outline: none; }
+        #fila-total td {
+            font-weight: bold;
+            background-color: #f4f6f9;
+            font-size: 1.05rem;
+        }
     </style>
 
     <div id="divcontenedor">
@@ -80,7 +85,6 @@
                                         <div class="form-group">
                                             <label>Tipo de Compra: <span class="text-danger">*</span></label>
                                             <select class="form-control" id="select-tipocompra" style="width:100%">
-                                                <option value="">Seleccione...</option>
                                                 @foreach($arrayTipoCompra as $tc)
                                                     <option value="{{ $tc->id }}">{{ $tc->nombre }}</option>
                                                 @endforeach
@@ -166,11 +170,11 @@
                                     </div>
                                     <div class="col-md-4">
                                         <div class="form-group">
-                                            <label>Precio (4 decimales) <span class="text-danger">*</span></label>
+                                            <label>Precio (6 decimales) <span class="text-danger">*</span></label>
                                             <input type="text" id="precio-producto" inputmode="decimal"
-                                                   class="form-control" autocomplete="off" placeholder="0.0000"
+                                                   class="form-control" autocomplete="off" placeholder="0.000000"
                                                    onkeypress="return validarDecimal(event, this)"
-                                                   oninput="limitarDecimales(this, 4)">
+                                                   oninput="limitarDecimales(this, 6); calcularPreviewSubtotal();">
                                         </div>
                                     </div>
                                     <div class="col-md-4">
@@ -178,6 +182,21 @@
                                             <label>Detalle (Opcional):</label>
                                             <input type="text" id="codigo" maxlength="100"
                                                    class="form-control" autocomplete="off">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {{-- Preview Subtotal en Modal --}}
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label class="text-success font-weight-bold">
+                                                <i class="fas fa-calculator"></i> Subtotal:
+                                            </label>
+                                            <input type="text" id="preview-subtotal"
+                                                   class="form-control font-weight-bold text-success"
+                                                   readonly placeholder="$0.000000"
+                                                   style="background:#f4f9f4; font-size:1.1rem;">
                                         </div>
                                     </div>
                                 </div>
@@ -211,15 +230,23 @@
                             <table class="table table-bordered table-hover mb-0" id="matriz">
                                 <thead>
                                 <tr>
-                                    <th style="width:5%">#</th>
-                                    <th style="width:38%">Material</th>
-                                    <th style="width:12%">Cantidad</th>
-                                    <th style="width:15%">Código/Detalle</th>
-                                    <th style="width:15%">Precio</th>
+                                    <th style="width:4%">#</th>
+                                    <th style="width:33%">Material</th>
+                                    <th style="width:10%">Cantidad</th>
+                                    <th style="width:12%">Código/Detalle</th>
+                                    <th style="width:13%">Precio Unit.</th>
+                                    <th style="width:13%">Subtotal</th>
                                     <th style="width:15%">Opciones</th>
                                 </tr>
                                 </thead>
                                 <tbody></tbody>
+                                <tfoot>
+                                <tr id="fila-total">
+                                    <td colspan="5" class="text-right">TOTAL GENERAL:</td>
+                                    <td id="total-general" class="text-success">$0.000000</td>
+                                    <td></td>
+                                </tr>
+                                </tfoot>
                             </table>
                         </div>
                     </div>
@@ -271,52 +298,63 @@
             $(document).click(function () {
                 $('.droplista').hide();
             });
+
+            // Preview subtotal en tiempo real
+            $('#cantidad, #precio-producto').on('input', function () {
+                calcularPreviewSubtotal();
+            });
         });
+
+        // ── Preview subtotal en modal ─────────────────────────────────
+        function calcularPreviewSubtotal() {
+            var cantidad = parseFloat(document.getElementById('cantidad').value) || 0;
+            var precio   = parseFloat(document.getElementById('precio-producto').value) || 0;
+            var subtotal = cantidad * precio;
+            document.getElementById('preview-subtotal').value = '$' + subtotal.toFixed(6);
+        }
+
+        // ── Recalcular total general ──────────────────────────────────
+        function recalcularTotal() {
+            var total = 0;
+            $("input[name='arraySubtotal[]']").each(function () {
+                total += parseFloat($(this).attr('data-subtotal')) || 0;
+            });
+            document.getElementById('total-general').textContent = '$' + total.toFixed(6);
+        }
 
         // Solo permite números y un único punto decimal
         function validarDecimal(e, input) {
             var char = String.fromCharCode(e.which);
             var valor = input.value;
-
-            if (e.which === 0) return true; // teclas especiales (backspace, etc)
-
+            if (e.which === 0) return true;
             if (char === '.') {
-                // Solo un punto permitido
                 if (valor.indexOf('.') !== -1) return false;
                 return true;
             }
-
             if (!/[0-9]/.test(char)) return false;
-
             return true;
         }
 
         // Limita la cantidad de decimales mientras escribe
         function limitarDecimales(input, max) {
             var valor = input.value;
-
-            // Eliminar cualquier caracter que no sea número o punto
             valor = valor.replace(/[^0-9.]/g, '');
-
-            // Evitar más de un punto
             var partes = valor.split('.');
             if (partes.length > 2) {
                 valor = partes[0] + '.' + partes.slice(1).join('');
                 partes = valor.split('.');
             }
-
-            // Limitar decimales
             if (partes[1] && partes[1].length > max) {
                 partes[1] = partes[1].substring(0, max);
                 valor = partes[0] + '.' + partes[1];
             }
-
             input.value = valor;
         }
 
         // ── Modal ─────────────────────────────────────────────────────
         function abrirModal() {
             document.getElementById('formulario-repuesto').reset();
+            document.getElementById('preview-subtotal').value = '';
             $('#repuesto').attr('data-info', '0').attr('data-nombre', '');
             $('#modalRepuesto').modal({ backdrop: 'static', keyboard: false });
         }
@@ -331,7 +369,7 @@
             var precio      = document.getElementById('precio-producto').value;
 
             var reglaEntero  = /^[0-9]\d*$/;
-            var reglaDecimal = /^([0-9]+\.?[0-9]{0,4})$/;
+            var reglaDecimal = /^([0-9]+\.?[0-9]{0,6})$/;
 
             if (!idMaterial || idMaterial == 0 || idMaterial === '') {
                 toastr.error('Seleccione un material de la lista'); return;
@@ -360,6 +398,9 @@
                 toastr.warning('Este material ya fue agregado'); return;
             }
 
+            // Calcular subtotal
+            var subtotal = (parseFloat(cantidad) * parseFloat(precio)).toFixed(6);
+
             var nFilas = $('#matriz tbody tr').length + 1;
 
             var fila = `
@@ -380,7 +421,12 @@
                     </td>
                     <td>
                         <input name="arrayPrecio[]" type="hidden" value="${precio}">
-                        $${parseFloat(precio).toFixed(4)}
+                        $${parseFloat(precio).toFixed(6)}
+                    </td>
+                    <td>
+                        <input name="arraySubtotal[]" type="hidden"
+                               data-subtotal="${subtotal}" value="${subtotal}">
+                        <span class="font-weight-bold text-success">$${subtotal}</span>
                     </td>
                     <td>
                         <button type="button" class="btn btn-danger btn-sm btn-block"
@@ -391,10 +437,12 @@
                 </tr>`;
 
             $('#matriz tbody').append(fila);
+            recalcularTotal();
             toastr.success('Material agregado');
             $('#modalRepuesto').modal('hide');
 
             document.getElementById('formulario-repuesto').reset();
+            document.getElementById('preview-subtotal').value = '';
             $('#repuesto').attr('data-info', '0').attr('data-nombre', '');
         }
 
@@ -402,6 +450,7 @@
         function borrarFila(btn) {
             $(btn).closest('tr').remove();
             renumerarFilas();
+            recalcularTotal();
         }
 
         function renumerarFilas() {
@@ -463,17 +512,17 @@
             var factura     = document.getElementById('factura').value;
             var descripcion = document.getElementById('descripcion').value;
             var tipocompra  = document.getElementById('select-tipocompra').value;
-            var proveedor  = document.getElementById('select-proveedor').value;
+            var proveedor   = document.getElementById('select-proveedor').value;
 
             if (!fecha)      { toastr.error('Fecha es requerida'); return; }
             if (!tipocompra) { toastr.error('Tipo de Compra es requerido'); return; }
-            if (!proveedor) { toastr.error('Proveedor es requerido'); return; }
+            if (!proveedor)  { toastr.error('Proveedor es requerido'); return; }
 
             var nFilas = $('#matriz tbody tr').length;
             if (nFilas === 0) { toastr.error('Agregue al menos un material'); return; }
 
             var reglaEntero  = /^[0-9]\d*$/;
-            var reglaDecimal = /^([0-9]+\.?[0-9]{0,4})$/;
+            var reglaDecimal = /^([0-9]+\.?[0-9]{0,6})$/;
 
             var contenedorArray = [];
             var valido = true;
@@ -481,11 +530,11 @@
             $('#matriz tbody tr').each(function (i) {
                 if (!valido) return;
 
-                var idMaterial  = $(this).find('input[name="descripcionArray[]"]').attr('data-info');
-                var nombre      = $(this).find('input[name="descripcionArray[]"]').attr('data-nombre');
+                var idMaterial   = $(this).find('input[name="descripcionArray[]"]').attr('data-info');
+                var nombre       = $(this).find('input[name="descripcionArray[]"]').attr('data-nombre');
                 var infoCantidad = $(this).find('input[name="cantidadArray[]"]').val();
-                var infoCodigo  = $(this).find('input[name="codigoArray[]"]').val();
-                var infoPrecio  = $(this).find('input[name="arrayPrecio[]"]').val();
+                var infoCodigo   = $(this).find('input[name="codigoArray[]"]').val();
+                var infoPrecio   = $(this).find('input[name="arrayPrecio[]"]').val();
 
                 if (!idMaterial || idMaterial == 0) {
                     colorRojoTabla(i);
@@ -519,7 +568,7 @@
             formData.append('factura',         factura);
             formData.append('descripcion',     descripcion);
             formData.append('tipocompra',      tipocompra);
-            formData.append('proveedor',      proveedor);
+            formData.append('proveedor',       proveedor);
             formData.append('contenedorArray', JSON.stringify(contenedorArray));
 
             openLoading();
@@ -547,8 +596,11 @@
         function limpiar() {
             document.getElementById('descripcion').value = '';
             document.getElementById('factura').value = '';
+            document.getElementById('preview-subtotal').value = '';
             $('#select-tipocompra').val('').trigger('change');
+            $('#select-proveedor').val('').trigger('change');
             $('#matriz tbody').empty();
+            recalcularTotal();
         }
     </script>
 @endsection
