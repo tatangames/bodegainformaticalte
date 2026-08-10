@@ -207,10 +207,18 @@
                                     <th style="width:16%">Detalle (opcional)</th>
                                     <th style="width:10%" class="text-center">Cantidad</th>
                                     <th style="width:13%" class="text-right">Precio unit.</th>
+                                    <th style="width:13%" class="text-right">Subtotal</th>
                                     <th style="width:12%" class="text-center">Acciones</th>
                                 </tr>
                                 </thead>
                                 <tbody id="detalle-tbody"></tbody>
+                                <tfoot>
+                                <tr class="table-dark">
+                                    <th colspan="5" class="text-right">Total</th>
+                                    <th class="text-right" id="detalle-total">$0.00</th>
+                                    <th></th>
+                                </tr>
+                                </tfoot>
                             </table>
                         </div>
                     </div>
@@ -531,6 +539,7 @@
             $('#detalle-titulo').text(titulo);
             $('#btn-agregar-extras').attr('href', urlAdmin + '/admin/historial/entradas/extras/' + id);
             $('#detalle-tbody').html('');
+            $('#detalle-total').text('$0.00');
             $('#detalle-contenido').hide();
             $('#detalle-vacio').hide();
             $('#detalle-loading').show();
@@ -540,8 +549,13 @@
                 .then(function (response) {
                     $('#detalle-loading').hide();
                     if (response.data.success === 1 && response.data.detalle.length > 0) {
-                        let html = '';
+                        let html         = '';
+                        let totalGeneral = 0;
+
                         response.data.detalle.forEach(function (fila, index) {
+                            const subtotal = parseFloat(fila.precio_raw) * parseFloat(fila.cantidad_inicial);
+                            totalGeneral  += subtotal;
+
                             html += `
                                 <tr>
                                     <td>${index + 1}</td>
@@ -549,6 +563,7 @@
                                     <td>${fila.codigo}</td>
                                     <td class="text-center">${fila.cantidad_inicial}</td>
                                     <td class="text-right">$${fila.precio}</td>
+                                    <td class="text-right">$${subtotal.toLocaleString('en-US', {minimumFractionDigits:4, maximumFractionDigits:4})}</td>
                                     <td class="text-center text-nowrap">
                                         <button type="button"
                                                 class="btn btn-warning btn-xs btn-editar-detalle mr-1"
@@ -569,6 +584,8 @@
                                     </td>
                                 </tr>`;
                         });
+
+                        $('#detalle-total').text('$' + totalGeneral.toLocaleString('en-US', {minimumFractionDigits:4, maximumFractionDigits:4}));
                         $('#detalle-tbody').html(html);
                         $('#detalle-contenido').show();
                     } else {
