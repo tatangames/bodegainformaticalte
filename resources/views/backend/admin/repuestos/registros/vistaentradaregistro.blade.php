@@ -243,7 +243,7 @@
                                 <tfoot>
                                 <tr id="fila-total">
                                     <td colspan="5" class="text-right">TOTAL GENERAL:</td>
-                                    <td id="total-general" class="text-success">$0.000000</td>
+                                    <td id="total-general" class="text-success">$0.0000</td>
                                     <td></td>
                                 </tr>
                                 </tfoot>
