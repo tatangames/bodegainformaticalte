@@ -170,11 +170,11 @@
                                     </div>
                                     <div class="col-md-4">
                                         <div class="form-group">
-                                            <label>Precio (6 decimales) <span class="text-danger">*</span></label>
+                                            <label>Precio (4 decimales) <span class="text-danger">*</span></label>
                                             <input type="text" id="precio-producto" inputmode="decimal"
-                                                   class="form-control" autocomplete="off" placeholder="0.000000"
+                                                   class="form-control" autocomplete="off" placeholder="0.0000"
                                                    onkeypress="return validarDecimal(event, this)"
-                                                   oninput="limitarDecimales(this, 6); calcularPreviewSubtotal();">
+                                                   oninput="limitarDecimales(this, 4); calcularPreviewSubtotal();">
                                         </div>
                                     </div>
                                     <div class="col-md-4">
@@ -195,7 +195,7 @@
                                             </label>
                                             <input type="text" id="preview-subtotal"
                                                    class="form-control font-weight-bold text-success"
-                                                   readonly placeholder="$0.000000"
+                                                   readonly placeholder="$0.0000"
                                                    style="background:#f4f9f4; font-size:1.1rem;">
                                         </div>
                                     </div>
@@ -310,7 +310,7 @@
             var cantidad = parseFloat(document.getElementById('cantidad').value) || 0;
             var precio   = parseFloat(document.getElementById('precio-producto').value) || 0;
             var subtotal = cantidad * precio;
-            document.getElementById('preview-subtotal').value = '$' + subtotal.toFixed(6);
+            document.getElementById('preview-subtotal').value = '$' + subtotal.toFixed(4);
         }
 
         // ── Recalcular total general ──────────────────────────────────
@@ -319,7 +319,7 @@
             $("input[name='arraySubtotal[]']").each(function () {
                 total += parseFloat($(this).attr('data-subtotal')) || 0;
             });
-            document.getElementById('total-general').textContent = '$' + total.toFixed(6);
+            document.getElementById('total-general').textContent = '$' + total.toFixed(4);
         }
 
         // Solo permite números y un único punto decimal
@@ -399,7 +399,7 @@
             }
 
             // Calcular subtotal
-            var subtotal = (parseFloat(cantidad) * parseFloat(precio)).toFixed(6);
+            var subtotal = (parseFloat(cantidad) * parseFloat(precio)).toFixed(4);
 
             var nFilas = $('#matriz tbody tr').length + 1;
 
@@ -421,7 +421,7 @@
                     </td>
                     <td>
                         <input name="arrayPrecio[]" type="hidden" value="${precio}">
-                        $${parseFloat(precio).toFixed(6)}
+                        $${parseFloat(precio).toFixed(4)}
                     </td>
                     <td>
                         <input name="arraySubtotal[]" type="hidden"
