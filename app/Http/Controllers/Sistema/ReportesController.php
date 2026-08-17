@@ -901,7 +901,9 @@ class ReportesController extends Controller
     ";
         }
 
-        $margenFirma = $infoGerencia->margen ?? '40px';
+        $informacionGeneral = InformacionGeneral::where('id', 1)->first();
+
+        $margenFirma = $informacionGeneral->px_firmas ?? '40px';
 
         $html .= "
     <div style='text-align:center; font-size:13px; margin-top: {$margenFirma};'>
