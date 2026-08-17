@@ -908,7 +908,7 @@ class ReportesController extends Controller
         $html .= "
     <div style='text-align:center; font-size:13px; margin-top: {$margenFirma};'>
         F._____________________________<br>
-        <span style='font-weight:bold; font-size:12px;'>Unidad de Tecnologías de la Información</span>
+        <span style='font-weight:bold; font-size:14px;'>Unidad de Tecnologías de la Información</span>
     </div>
 ";
 
