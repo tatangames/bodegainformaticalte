@@ -291,6 +291,17 @@
             </span>
         </a>
 
+        {{-- Sistema 12 --}}
+        <a href="http://190.86.196.105/activobodega.com/" target="_blank" rel="noopener noreferrer" class="sys-card">
+            <div class="sys-icon ic-green">
+                <i class="ti ti-settings" aria-hidden="true"></i>
+            </div>
+            <p class="sys-name">Inventario y Activo Fijo</p>
+            <span class="sys-link">
+                <i class="ti ti-external-link"></i> Ingresar
+            </span>
+        </a>
+
 
     </div>
 
