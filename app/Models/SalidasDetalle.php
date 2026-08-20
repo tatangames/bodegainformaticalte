@@ -37,4 +37,20 @@ class SalidasDetalle extends Model
         return $this->estado === 'pendiente';
     }
 
+    public function entregas()
+    {
+        return $this->hasMany(SalidasDetalleEntregas::class, 'id_salida_detalle', 'id');
+    }
+
+    public function departamento()
+    {
+        return $this->belongsTo(Departamentos::class, 'id_departamento', 'id');
+    }
+
+    // En SalidasDetalle — agrega este método
+    public function tipoSalida()
+    {
+        return $this->belongsTo(TipoSalida::class, 'id_tiposalida', 'id');
+    }
+
 }

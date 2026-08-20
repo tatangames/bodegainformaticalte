@@ -12,6 +12,7 @@ use App\Models\Salidas;
 use App\Models\SalidasDetalle;
 use App\Models\SalidasDetalleEntregas;
 use App\Models\TipoProyecto;
+use App\Models\TipoSalida;
 use App\Models\Transferencia;
 use App\Models\TransferenciaDetalle;
 use App\Models\UnidadMedida;
@@ -29,7 +30,12 @@ class ReportesController extends Controller
 
     public function vistaReporteGenerales()
     {
-        return view('backend.admin.reportes.vistareportegenerales');
+        $arrayUnidades   = Departamentos::orderBy('nombre', 'ASC')->get();
+        $arrayMateriales = Materiales::orderBy('nombre', 'ASC')->get();
+        $arrayTipos      = TipoSalida::orderBy('id', 'ASC')->get();
+
+        return view('backend.admin.reportes.vistareportegenerales',
+            compact('arrayUnidades', 'arrayMateriales', 'arrayTipos'));
     }
 
 
@@ -919,6 +925,415 @@ class ReportesController extends Controller
 
 
 
+
+    public function reportePDFEntregadoAunidades($idDep, $desde = '0', $hasta = '0')
+    {
+        // ── 1. Validar departamento ───────────────────────────────────────────
+        $departamento = Departamentos::findOrFail($idDep);
+
+        // ── 2. Query base: salidas_detalle + entregas para ese departamento ───
+        //   Consideramos entregas en salidas_detalle_entregas ligadas al depto,
+        //   Y también salidas_detalle directamente asignadas al depto.
+
+        // Traemos salidas_detalle del departamento (asignación directa)
+        $querySD = SalidasDetalle::with([
+            'entradaDetalle.material.unidadMedida',
+            'entradaDetalle.material.objetoEspecifico',
+            'entradaDetalle.entrada',
+            'entregas' => function ($q) use ($idDep, $desde, $hasta) {
+                $q->where(function($sub) use ($idDep) {
+                    $sub->where('id_departamento', $idDep)
+                        ->orWhereNull('id_departamento');
+                });
+                if ($desde !== '0' && $hasta !== '0') {
+                    $q->whereBetween('fecha_entrega', [$desde, $hasta]);
+                } elseif ($desde !== '0') {
+                    $q->where('fecha_entrega', '>=', $desde);
+                } elseif ($hasta !== '0') {
+                    $q->where('fecha_entrega', '<=', $hasta);
+                }
+            }
+        ])
+            ->where('id_departamento', $idDep);
+
+        // Filtro de fecha sobre la salida si no hay fechas en entregas
+        if ($desde !== '0' && $hasta !== '0') {
+            $querySD->whereBetween('fecha', [$desde, $hasta]);
+        } elseif ($desde !== '0') {
+            $querySD->where('fecha', '>=', $desde);
+        } elseif ($hasta !== '0') {
+            $querySD->where('fecha', '<=', $hasta);
+        }
+
+        $salidasDetalle = $querySD->orderBy('fecha', 'asc')->get();
+
+        // ── 3. También incluir entregas directas en salidas_detalle_entregas ─
+        //    (salidas que no están directamente en el depto pero sí las entregas)
+        $queryEnt = SalidasDetalleEntregas::with([
+            'salidaDetalle.entradaDetalle.material.unidadMedida',
+            'salidaDetalle.entradaDetalle.material.objetoEspecifico',
+            'salidaDetalle.entradaDetalle.entrada',
+        ])
+            ->where('id_departamento', $idDep);
+
+        if ($desde !== '0' && $hasta !== '0') {
+            $queryEnt->whereBetween('fecha_entrega', [$desde, $hasta]);
+        } elseif ($desde !== '0') {
+            $queryEnt->where('fecha_entrega', '>=', $desde);
+        } elseif ($hasta !== '0') {
+            $queryEnt->where('fecha_entrega', '<=', $hasta);
+        }
+
+        $entregasDirectas = $queryEnt->orderBy('fecha_entrega', 'asc')->get();
+
+        // ── 4. Consolidar en una colección unificada ──────────────────────────
+        $filas = collect();
+
+        // 4a. Desde salidas_detalle asignadas directamente al depto
+        foreach ($salidasDetalle as $sd) {
+            $mat = $sd->entradaDetalle->material ?? null;
+            if (!$mat) continue;
+
+            $cantidadEntregada = $sd->entregas->sum('cantidad');
+            // Si no hay entregas registradas, la salida completa se considera entregada
+            if ($cantidadEntregada == 0) {
+                $cantidadEntregada = $sd->cantidad_salida;
+            }
+
+            $detalleEntregas = $sd->entregas->map(function ($e) use ($mat) {
+                return [
+                    'fecha'      => date('d-m-Y', strtotime($e->fecha_entrega)),
+                    'cantidad'   => $e->cantidad,
+                    'um'         => $mat->unidadMedida->nombre ?? '',
+                    'observacion'=> $e->observacion ?: '—',
+                ];
+            })->toArray();
+
+            $filas->push((object)[
+                'fecha_raw'       => $sd->fecha,                                    // ← NUEVO
+                'fecha'           => date('d-m-Y', strtotime($sd->fecha)),
+                'nombreMaterial'  => $mat->nombre ?? '',
+                'unidadMedida'    => $mat->unidadMedida->nombre ?? '',
+                'cantidad'        => $cantidadEntregada,
+                'descripcion'     => $sd->descripcion ?: '—',
+                'numero_solicitud'=> $sd->numero_solicitud ?: '—',
+                'lote'            => $sd->entradaDetalle->entrada->lote ?? '—',
+                'detalleEntregas' => $detalleEntregas,
+                'fuente'          => 'salida',
+            ]);
+        }
+
+        // 4b. Desde entregas directas en salidas_detalle_entregas
+        //     Evitamos duplicar los que ya están en salidas directas del depto
+        $idsYaCargados = $salidasDetalle->pluck('id')->toArray();
+
+        foreach ($entregasDirectas as $ent) {
+            $sd  = $ent->salidaDetalle;
+            $mat = $sd->entradaDetalle->material ?? null;
+            if (!$mat) continue;
+
+            // Si la salida ya fue cargada arriba, skip
+            if (in_array($sd->id, $idsYaCargados)) continue;
+
+            $filas->push((object)[
+                'fecha_raw'       => $ent->fecha_entrega,                           // ← NUEVO
+                'fecha'           => date('d-m-Y', strtotime($ent->fecha_entrega)),
+                'nombreMaterial'  => $mat->nombre ?? '',
+                'unidadMedida'    => $mat->unidadMedida->nombre ?? '',
+                'cantidad'        => $ent->cantidad,
+                'descripcion'     => $sd->descripcion ?: '—',
+                'numero_solicitud'=> $sd->numero_solicitud ?: '—',
+                'lote'            => $sd->entradaDetalle->entrada->lote ?? '—',
+                'detalleEntregas' => [[
+                    'fecha'      => date('d-m-Y', strtotime($ent->fecha_entrega)),
+                    'cantidad'   => $ent->cantidad,
+                    'um'         => $mat->unidadMedida->nombre ?? '',
+                    'observacion'=> $ent->observacion ?: '—',
+                ]],
+                'fuente'          => 'entrega',
+            ]);
+        }
+
+        $filas = $filas->sortBy('fecha_raw')->values();
+
+        $totalUnidades = $filas->sum('cantidad');
+
+        // ── 5. Fechas y encabezado ────────────────────────────────────────────
+        $fechaHoy    = date('d-m-Y', strtotime(Carbon::now('America/El_Salvador')));
+        $rangoTexto  = ($desde !== '0' && $hasta !== '0')
+            ? 'Del ' . date('d-m-Y', strtotime($desde)) . ' al ' . date('d-m-Y', strtotime($hasta))
+            : 'Todo el historial';
+
+        // ── 6. Generar PDF ────────────────────────────────────────────────────
+        $mpdf = new \Mpdf\Mpdf(['tempDir' => sys_get_temp_dir(), 'format' => 'LETTER']);
+        $mpdf->SetTitle('Entregado a ' . $departamento->nombre);
+        $mpdf->showImageErrors = false;
+
+        $logoalcaldia = 'images/gobiernologo.jpg';
+        $logosantaana = 'images/logo.png';
+
+        // ── Encabezado ────────────────────────────────────────────────────────
+        $html = "
+    <table style='width:100%; border-collapse:collapse;'>
+        <tr>
+            <td style='width:15%; text-align:left;'>
+                <img src='$logosantaana' alt='Santa Ana Norte' style='max-width:100px; height:auto;'>
+            </td>
+            <td style='width:70%; text-align:center;'>
+                <h1 style='font-size:16px; margin:0; color:#003366; text-transform:uppercase;'>
+                    ALCALDÍA MUNICIPAL DE SANTA ANA NORTE
+                </h1>
+            </td>
+            <td style='width:15%; text-align:right;'>
+
+            </td>
+        </tr>
+    </table>
+    <hr style='border:none; border-top:2px solid #003366; margin:0;'>
+
+    <div style='text-align:center; margin-top:16px;'>
+        <h1 style='font-size:15px; margin:0; color:#000; text-transform:uppercase;'>
+            MATERIALES ENTREGADOS A: {$departamento->nombre}
+        </h1>
+        <p style='font-size:12px; margin:4px 0 0 0; color:#444;'>
+            {$rangoTexto} &nbsp;|&nbsp; Impreso: {$fechaHoy}
+        </p>
+    </div>
+    ";
+
+        // ── Tabla de entregas ─────────────────────────────────────────────────
+        if ($filas->isEmpty()) {
+            $html .= "
+        <p style='margin-top:30px; text-align:center; font-size:13px; color:#666;'>
+            No se encontraron entregas para esta unidad en el período seleccionado.
+        </p>";
+        } else {
+            $html .= "
+        <table style='width:100%; border-collapse:collapse; margin-top:20px;'>
+            <thead>
+                <tr>
+                    <th style='border:1px solid #000; font-size:13px; padding:4px; text-align:center; width:10%;'>Fecha</th>
+                    <th style='border:1px solid #000; font-size:13px; padding:4px; text-align:center; width:28%;'>Producto</th>
+                    <th style='border:1px solid #000; font-size:13px; padding:4px; text-align:center; width:7%;'>U.M</th>
+                    <th style='border:1px solid #000; font-size:13px; padding:4px; text-align:center; width:8%;'>Cantidad</th>
+                    <th style='border:1px solid #000; font-size:13px; padding:4px; text-align:center; width:12%;'>No. Solicitud</th>
+                    <th style='border:1px solid #000; font-size:13px; padding:4px; text-align:center; width:25%;'>Descripción / Observación</th>
+                </tr>
+            </thead>
+            <tbody>
+        ";
+
+            foreach ($filas as $fila) {
+                // Construir celda de descripción con detalle de entregas si hay varios
+                $descCell = htmlspecialchars($fila->descripcion);
+                if (count($fila->detalleEntregas) > 1) {
+                    $descCell .= "<br><small style='color:#555;'>";
+                    foreach ($fila->detalleEntregas as $de) {
+                        $descCell .= "• {$de['fecha']}: {$de['cantidad']} {$de['um']} — {$de['observacion']}<br>";
+                    }
+                    $descCell .= "</small>";
+                } elseif (count($fila->detalleEntregas) === 1) {
+                    $de = $fila->detalleEntregas[0];
+                    if ($de['observacion'] !== '—') {
+                        $descCell .= "<br><small style='color:#555;'>Obs: {$de['observacion']}</small>";
+                    }
+                }
+
+                $html .= "
+            <tr>
+                <td style='border:1px solid #000; font-size:12px; padding:3px; text-align:center; vertical-align:top;'>
+                    {$fila->fecha}
+                </td>
+                <td style='border:1px solid #000; font-size:12px; padding:3px; text-align:left; vertical-align:top;'>
+                    {$fila->nombreMaterial}
+                </td>
+                <td style='border:1px solid #000; font-size:12px; padding:3px; text-align:center; vertical-align:top;'>
+                    {$fila->unidadMedida}
+                </td>
+                <td style='border:1px solid #000; font-size:12px; padding:3px; text-align:center; vertical-align:top;'>
+                    {$fila->cantidad}
+                </td>
+                <td style='border:1px solid #000; font-size:12px; padding:3px; text-align:center; vertical-align:top;'>
+                    {$fila->numero_solicitud}
+                </td>
+
+                <td style='border:1px solid #000; font-size:12px; padding:3px; text-align:left; vertical-align:top;'>
+                    {$descCell}
+                </td>
+            </tr>";
+            }
+
+
+
+            $html .= "</tbody></table>";
+        }
+
+        // ── Escribir y Output ─────────────────────────────────────────────────
+        $stylesheet = file_get_contents('css/cssbodega.css');
+        $mpdf->WriteHTML($stylesheet, 1);
+        $mpdf->setFooter('Página: {PAGENO}/{nb}');
+        $mpdf->WriteHTML($html, 2);
+        $mpdf->Output();
+    }
+
+
+
+
+    public function reportePDFEntregadoPorMaterial($idMat, $desde = '0', $hasta = '0')
+    {
+        // ── 1. Material ───────────────────────────────────────────────────────
+        $material = Materiales::with('unidadMedida')->findOrFail($idMat);
+
+        // ── 2. Todos los entradas_detalle de ese material ─────────────────────
+        $entradasDetalle = EntradasDetalle::where('id_material', $idMat)->pluck('id');
+
+        // ── 3. Salidas filtradas por fecha ────────────────────────────────────
+        $query = SalidasDetalle::with([
+            'departamento',
+            'tipoSalida',
+            'entradaDetalle.entrada',
+        ])
+            ->whereIn('id_entrada_detalle', $entradasDetalle);
+
+        if ($desde !== '0' && $hasta !== '0') {
+            $query->whereBetween('fecha', [$desde, $hasta]);
+        } elseif ($desde !== '0') {
+            $query->where('fecha', '>=', $desde);
+        } elseif ($hasta !== '0') {
+            $query->where('fecha', '<=', $hasta);
+        }
+
+        $salidas = $query->orderBy('fecha', 'asc')->get();
+
+        // ── 4. Consolidar filas ───────────────────────────────────────────────
+        $filas = collect();
+
+        foreach ($salidas as $sd) {
+            $filas->push((object)[
+                'fecha_raw'        => $sd->fecha,
+                'fecha'            => date('d-m-Y', strtotime($sd->fecha)),
+                'departamento'     => $sd->departamento->nombre ?? 'Sin unidad',
+                'tipo'             => $sd->tipoSalida->nombre ?? '—',
+                'cantidad'         => $sd->cantidad_salida,
+                'numero_solicitud' => $sd->numero_solicitud ?: '—',
+                'descripcion'      => $sd->descripcion ?: '—',
+            ]);
+        }
+
+        $filas = $filas->sortBy('fecha_raw')->values();
+
+        $totalEntregado = $filas->sum('cantidad');
+
+        // ── 5. Textos del encabezado ──────────────────────────────────────────
+        $fechaHoy   = date('d-m-Y', strtotime(Carbon::now('America/El_Salvador')));
+        $rangoTexto = ($desde !== '0' && $hasta !== '0')
+            ? 'Del ' . date('d-m-Y', strtotime($desde)) . ' al ' . date('d-m-Y', strtotime($hasta))
+            : 'Todo el historial';
+
+        // ── 6. PDF ────────────────────────────────────────────────────────────
+        $mpdf = new \Mpdf\Mpdf(['tempDir' => sys_get_temp_dir(), 'format' => 'LETTER']);
+        $mpdf->SetTitle('Entregas de ' . $material->nombre);
+        $mpdf->showImageErrors = false;
+
+        $logosantaana = 'images/logo.png';
+        $logoalcaldia = 'images/gobiernologo.jpg';
+
+        $html = "
+    <table style='width:100%; border-collapse:collapse;'>
+        <tr>
+            <td style='width:15%; text-align:left;'>
+                <img src='$logosantaana' style='max-width:100px; height:auto;'>
+            </td>
+            <td style='width:70%; text-align:center;'>
+                <h1 style='font-size:16px; margin:0; color:#003366; text-transform:uppercase;'>
+                    ALCALDÍA MUNICIPAL DE SANTA ANA NORTE
+                </h1>
+            </td>
+            <td style='width:15%; text-align:right;'>
+                <img src='$logoalcaldia' style='max-width:60px; height:auto;'>
+            </td>
+        </tr>
+    </table>
+    <hr style='border:none; border-top:2px solid #003366; margin:0;'>
+
+    <div style='text-align:center; margin-top:14px;'>
+        <h1 style='font-size:15px; margin:0; color:#000; text-transform:uppercase;'>
+            HISTORIAL DE ENTREGAS — {$material->nombre}
+        </h1>
+        <p style='font-size:12px; margin:4px 0 2px 0; color:#444;'>
+            {$rangoTexto} &nbsp;|&nbsp; Impreso: {$fechaHoy}
+            &nbsp;|&nbsp; U.M: <strong>{$material->unidadMedida->nombre}</strong>
+        </p>
+    </div>
+    ";
+
+        if ($filas->isEmpty()) {
+            $html .= "
+        <p style='margin-top:30px; text-align:center; font-size:13px; color:#666;'>
+            No se encontraron salidas para este material en el período seleccionado.
+        </p>";
+        } else {
+            $html .= "
+        <table style='width:100%; border-collapse:collapse; margin-top:18px;'>
+            <thead>
+                <tr>
+                    <th style='border:1px solid #000; font-size:12px; padding:4px; text-align:center; width:10%;'>Fecha</th>
+                    <th style='border:1px solid #000; font-size:12px; padding:4px; text-align:center; width:26%;'>Unidad / Depto.</th>
+                    <th style='border:1px solid #000; font-size:12px; padding:4px; text-align:center; width:18%;'>Tipo de salida</th>
+                    <th style='border:1px solid #000; font-size:12px; padding:4px; text-align:center; width:10%;'>Cantidad</th>
+                    <th style='border:1px solid #000; font-size:12px; padding:4px; text-align:center; width:13%;'>No. Solicitud</th>
+                    <th style='border:1px solid #000; font-size:12px; padding:4px; text-align:center; width:23%;'>Descripción</th>
+                </tr>
+            </thead>
+            <tbody>
+        ";
+
+            foreach ($filas as $fila) {
+
+                $html .= "
+            <tr>
+                <td style='border:1px solid #000; font-size:11px; padding:3px; text-align:center; vertical-align:top;'>
+                    {$fila->fecha}
+                </td>
+                <td style='border:1px solid #000; font-size:11px; padding:3px; text-align:left; vertical-align:top;'>
+                    {$fila->departamento}
+                </td>
+                <td style='border:1px solid #000; font-size:11px; padding:3px; text-align:center; vertical-align:top;'>
+                    {$fila->tipo}
+                </td>
+                <td style='border:1px solid #000; font-size:11px; padding:3px; text-align:center; vertical-align:top;'>
+                    {$fila->cantidad}
+                </td>
+                <td style='border:1px solid #000; font-size:11px; padding:3px; text-align:center; vertical-align:top;'>
+                    {$fila->numero_solicitud}
+                </td>
+                <td style='border:1px solid #000; font-size:11px; padding:3px; text-align:left; vertical-align:top;'>
+                    " . htmlspecialchars($fila->descripcion) . "
+                </td>
+            </tr>";
+            }
+
+            $html .= "
+            <tr>
+                <td colspan='3' style='border:1px solid #000; font-size:12px; padding:4px;
+                    text-align:right; font-weight:bold;'>
+                    Total entregado:
+                </td>
+                <td style='border:1px solid #000; font-size:12px; padding:4px;
+                    text-align:center; font-weight:bold;'>
+                    {$totalEntregado}
+                </td>
+                <td colspan='2' style='border:1px solid #000;'></td>
+            </tr>
+        </tbody></table>";
+        }
+
+        $stylesheet = file_get_contents('css/cssbodega.css');
+        $mpdf->WriteHTML($stylesheet, 1);
+        $mpdf->setFooter('Página: {PAGENO}/{nb}');
+        $mpdf->WriteHTML($html, 2);
+        $mpdf->Output();
+    }
 
 
 }

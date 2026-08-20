@@ -12,6 +12,14 @@ class SalidasDetalleEntregas extends Model
     public $timestamps = false;
     protected $fillable = ['id_salida_detalle', 'id_departamento', 'numero_solicitud', 'cantidad', 'fecha_entrega', 'observacion'];
 
+    public function salidaDetalle()
+    {
+        return $this->belongsTo(SalidasDetalle::class, 'id_salida_detalle', 'id');
+    }
 
+    public function departamento()
+    {
+        return $this->belongsTo(Departamentos::class, 'id_departamento', 'id');
+    }
 
 }

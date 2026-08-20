@@ -143,6 +143,106 @@
                     </div>
                 </div>
 
+                {{-- ══ REPORTE ENTREGADO A DEPARTAMENTO ══ --}}
+                <div class="col-md-4">
+                    <div class="reporte-card">
+                        <div class="reporte-header" style="background: linear-gradient(135deg, #4a1a6b, #8e44ad);">
+                            <i class="fas fa-truck"></i>
+                            <h5>Reporte Entregado a Departamento</h5>
+                        </div>
+                        <div class="reporte-body">
+                            <p style="font-size:13px; color:#666; margin-bottom:14px;">
+                                Muestra todos los materiales entregados a la unidad/departamento seleccionado,
+                                con detalle de entregas por salida.
+                            </p>
+                            <hr class="divider">
+
+                            <div style="margin-bottom: 14px;">
+                                <label class="field-label">Unidad / Departamento <span class="text-danger">*</span></label>
+                                <select id="select-departamento" class="form-control form-control-sm select2-departamento"
+                                        style="width:100%;">
+                                    <option value="">-- Selecciona una unidad --</option>
+                                    @foreach($arrayUnidades as $dep)
+                                        <option value="{{ $dep->id }}">{{ $dep->nombre }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <div class="fecha-row">
+                                <div class="fecha-box">
+                                    <label>Fecha desde</label>
+                                    <input type="date" id="unidad-fecha-desde" class="form-control form-control-sm">
+                                </div>
+                                <div class="fecha-box">
+                                    <label>Fecha hasta</label>
+                                    <input type="date" id="unidad-fecha-hasta" class="form-control form-control-sm">
+                                </div>
+                            </div>
+
+
+                            <button type="button" onclick="generarReporteEntregadoUnidades()"
+                                    class="btn-pdf"
+                                    style="background: linear-gradient(135deg, #4a1a6b, #8e44ad); color:#fff;
+                           box-shadow: 0 4px 14px rgba(142,68,173,.35); margin-top:0;">
+                                <i class="fas fa-file-pdf"></i> Generar PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- ══ REPORTE POR MATERIAL — qué departamentos han recibido X material ══ --}}
+                <div class="col-md-4">
+                    <div class="reporte-card">
+                        <div class="reporte-header" style="background: linear-gradient(135deg, #1a5c4a, #1aad7a);">
+                            <i class="fas fa-box-open"></i>
+                            <h5>Entregas por Material</h5>
+                        </div>
+                        <div class="reporte-body">
+                            <p style="font-size:13px; color:#666; margin-bottom:14px;">
+                                Selecciona un material para ver a qué unidades/departamentos
+                                se les ha entregado y en qué cantidades.
+                            </p>
+                            <hr class="divider">
+
+                            <div style="margin-bottom:12px;">
+                                <label class="field-label">Material <span class="text-danger">*</span></label>
+                                <select id="select-material" class="form-control form-control-sm select2-material" style="width:100%;">
+                                    <option value="">-- Selecciona un material --</option>
+                                    @foreach($arrayMateriales as $mat)
+                                        <option value="{{ $mat->id }}">{{ $mat->nombre }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <div class="fecha-row">
+                                <div class="fecha-box">
+                                    <label>Fecha desde</label>
+                                    <input type="date" id="mat-fecha-desde" class="form-control form-control-sm">
+                                </div>
+                                <div class="fecha-box">
+                                    <label>Fecha hasta</label>
+                                    <input type="date" id="mat-fecha-hasta" class="form-control form-control-sm">
+                                </div>
+                            </div>
+                            <small class="text-muted" style="font-size:11px; display:block; margin-bottom:10px;">
+                                Las fechas son opcionales. Sin fechas muestra todo el historial.
+                            </small>
+
+                            <button type="button" onclick="generarReportePorMaterial()"
+                                    class="btn-pdf"
+                                    style="background: linear-gradient(135deg, #1a5c4a, #1aad7a); color:#fff;
+                           box-shadow: 0 4px 14px rgba(26,173,122,.35); margin-top:0;">
+                                <i class="fas fa-file-pdf"></i> Generar PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+
+
+
+
+
             </div>
         </div>
     </section>
@@ -177,6 +277,92 @@
             }
 
             var url = "{{ url('admin/bodega/reportespdf/inicial/final') }}/" + desde + '/' + hasta;
+            window.open(url, '_blank');
+        }
+
+        // ── Inicializar Select2 con búsqueda para el select de departamentos ──
+        $(document).ready(function () {
+            $('.select2-departamento').select2({
+                theme: 'bootstrap-5',
+                placeholder: '-- Selecciona una unidad --',
+                allowClear: true,
+                language: {
+                    noResults: function () { return "No se encontraron resultados"; },
+                    searching:  function () { return "Buscando..."; }
+                }
+            });
+        });
+
+        // ── Reporte de entregas por departamento ──────────────────────────────
+        function generarReporteEntregadoUnidades() {
+            var idDep = $('#select-departamento').val();
+            var desde = document.getElementById('unidad-fecha-desde').value;
+            var hasta = document.getElementById('unidad-fecha-hasta').value;
+
+            if (!idDep) {
+                toastr.error('Debes seleccionar una unidad/departamento');
+                return;
+            }
+
+            if (!desde) {
+                toastr.error('Debes seleccionar la fecha "desde"');
+                return;
+            }
+
+            if (!hasta) {
+                toastr.error('Debes seleccionar la fecha "hasta"');
+                return;
+            }
+
+            if (desde > hasta) {
+                toastr.error('La fecha "desde" no puede ser mayor que "hasta"');
+                return;
+            }
+
+            var url = "{{ url('admin/reporte/entregadopdf/unidades') }}"
+                + '/' + idDep
+                + '/' + desde
+                + '/' + hasta;
+
+            window.open(url, '_blank');
+        }
+
+
+
+        // ── Select2 para materiales ───────────────────────────────────────────────────
+        $(document).ready(function () {
+            $('.select2-material').select2({
+                theme: 'bootstrap-5',
+                placeholder: '-- Selecciona un material --',
+                allowClear: true,
+                language: {
+                    noResults:  function () { return "No se encontraron resultados"; },
+                    searching:  function () { return "Buscando..."; }
+                }
+            });
+        });
+
+        // ── Generar reporte por material ──────────────────────────────────────────────
+        function generarReportePorMaterial() {
+            var idMat  = $('#select-material').val();
+            var desde  = document.getElementById('mat-fecha-desde').value;
+            var hasta  = document.getElementById('mat-fecha-hasta').value;
+
+            if (!idMat) {
+                toastr.error('Debes seleccionar un material');
+                return;
+            }
+
+            if (desde && hasta && desde > hasta) {
+                toastr.error('La fecha "desde" no puede ser mayor que "hasta"');
+                return;
+            }
+
+            var url = "{{ url('admin/reporte/entregadopdf/material') }}"
+                + '/' + idMat
+                + '/' + (desde || '0')
+                + '/' + (hasta || '0');
+
             window.open(url, '_blank');
         }
 
