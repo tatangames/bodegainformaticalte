@@ -7,6 +7,7 @@
                         <table id="tabla" class="table table-bordered table-striped">
                             <thead>
                             <tr>
+                                <th style="width:8%">ID</th>
                                 <th style="width:8%">Código</th>
                                 <th style="width:25%">Nombre</th>
                                 <th style="width:20%">Cuenta</th>
@@ -17,6 +18,7 @@
                             <tbody>
                             @foreach($lista as $dato)
                                 <tr>
+                                    <td>{{ $dato->id }}</td>
                                     <td>{{ $dato->codigo }}</td>
                                     <td>{{ $dato->nombre }}</td>
                                     <td>{{ $dato->cuenta->codigo }} — {{ $dato->cuenta->nombre }}</td>
