@@ -53,4 +53,6 @@ class SalidasDetalle extends Model
         return $this->belongsTo(TipoSalida::class, 'id_tiposalida', 'id');
     }
 
+
+
 }

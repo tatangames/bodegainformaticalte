@@ -157,7 +157,9 @@ Route::middleware('auth:admin')->group(function () {
     Route::get('/admin/reporte/entregadopdf/material/{idMat}/{idTipo}/{desde?}/{hasta?}',
         [ReportesController::class, 'reportePDFEntregadoPorMaterial']);
 
-
+    Route::get('/admin/reporte/pendientes/material/{idMat}/{desde?}/{hasta?}',
+        [ReportesController::class, 'reportePDFEntregasPendientesPorMaterial'])
+        ->name('reporte.pendientes.material');
 
 
 

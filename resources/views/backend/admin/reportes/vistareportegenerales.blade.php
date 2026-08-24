@@ -239,7 +239,52 @@
                 </div>
 
 
+                {{-- ══ REPORTE ENTREGAS PENDIENTES POR MATERIAL ══ --}}
+                <div class="col-md-4">
+                    <div class="reporte-card">
+                        <div class="reporte-header" style="background: linear-gradient(135deg, #6b1a1a, #dc3545);">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h5>Entregas Pendientes por Material</h5>
+                        </div>
+                        <div class="reporte-body">
+                            <p style="font-size:13px; color:#666; margin-bottom:14px;">
+                                Muestra las salidas de un material que ha estado pendiente, ejemplo las TINTAS
+                            </p>
+                            <hr class="divider">
 
+                            <div style="margin-bottom:12px;">
+                                <label class="field-label">Material <span class="text-danger">*</span></label>
+                                <select id="select-material-pendiente"
+                                        class="form-control form-control-sm select2-material-pendiente"
+                                        style="width:100%;">
+                                    <option value="">-- Selecciona un material --</option>
+                                    @foreach($arrayMateriales as $mat)
+                                        <option value="{{ $mat->id }}">{{ $mat->nombre }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <div class="fecha-row">
+                                <div class="fecha-box">
+                                    <label>Fecha desde</label>
+                                    <input type="date" id="pend-fecha-desde" class="form-control form-control-sm">
+                                </div>
+                                <div class="fecha-box">
+                                    <label>Fecha hasta</label>
+                                    <input type="date" id="pend-fecha-hasta" class="form-control form-control-sm">
+                                </div>
+                            </div>
+                            <small class="text-muted" style="font-size:11px; display:block; margin-bottom:10px;">
+                                Las fechas son opcionales. Sin fechas muestra todo el historial.
+                            </small>
+
+                            <button type="button" onclick="generarReportePendientesMaterial()"
+                                    class="btn-pdf rojo" style="margin-top:0;">
+                                <i class="fas fa-file-pdf"></i> Generar PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
 
 
@@ -365,6 +410,55 @@
 
             window.open(url, '_blank');
         }
+
+
+
+
+
+
+
+
+
+
+        // ── Select2 para material pendiente ──────────────────────────────────────────
+        $(document).ready(function () {
+            $('.select2-material-pendiente').select2({
+                theme: 'bootstrap-5',
+                placeholder: '-- Selecciona un material --',
+                allowClear: true,
+                language: {
+                    noResults: function () { return "No se encontraron resultados"; },
+                    searching: function () { return "Buscando..."; }
+                }
+            });
+        });
+
+        // ── Generar reporte pendientes por material ───────────────────────────────────
+        function generarReportePendientesMaterial() {
+            var idMat = $('#select-material-pendiente').val();
+            var desde = document.getElementById('pend-fecha-desde').value;
+            var hasta = document.getElementById('pend-fecha-hasta').value;
+
+            if (!idMat) {
+                toastr.error('Debes seleccionar un material');
+                return;
+            }
+
+            if (desde && hasta && desde > hasta) {
+                toastr.error('La fecha "desde" no puede ser mayor que "hasta"');
+                return;
+            }
+
+            var url = "{{ url('admin/reporte/pendientes/material') }}"
+                + '/' + idMat
+                + '/' + (desde || '0')
+                + '/' + (hasta || '0');
+
+            window.open(url, '_blank');
+        }
+
+
+
 
     </script>
 @endsection

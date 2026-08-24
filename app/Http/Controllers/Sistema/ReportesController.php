@@ -1336,4 +1336,168 @@ class ReportesController extends Controller
     }
 
 
+
+    public function reportePDFEntregasPendientesPorMaterial($idMat, $desde = '0', $hasta = '0')
+    {
+        // ── 1. Material ───────────────────────────────────────────────────────
+        $material = Materiales::with('unidadMedida')->findOrFail($idMat);
+
+        // ── 2. Todos los entradas_detalle de ese material ─────────────────────
+        $entradasDetalle = EntradasDetalle::where('id_material', $idMat)->pluck('id');
+
+        // ── 3. IDs de salidas_detalle de ese material ─────────────────────────
+        $salidasDetalleIds = SalidasDetalle::whereIn('id_entrada_detalle', $entradasDetalle)
+            ->pluck('id');
+
+        // ── 4. Entregas registradas en salidas_detalle_entregas ───────────────
+        $query = SalidasDetalleEntregas::with([
+            'departamento',
+            'salidaDetalle.departamento',
+            'salidaDetalle.tipoSalida',
+        ])
+            ->whereIn('id_salida_detalle', $salidasDetalleIds);
+
+        if ($desde !== '0' && $hasta !== '0') {
+            $query->whereBetween('fecha_entrega', [$desde, $hasta]);
+        } elseif ($desde !== '0') {
+            $query->where('fecha_entrega', '>=', $desde);
+        } elseif ($hasta !== '0') {
+            $query->where('fecha_entrega', '<=', $hasta);
+        }
+
+        $entregas = $query->orderBy('fecha_entrega', 'asc')->get();
+
+        // ── 5. Consolidar filas ───────────────────────────────────────────────
+        $filas = collect();
+
+        foreach ($entregas as $e) {
+            $filas->push((object)[
+                'fecha_raw'        => $e->fecha_entrega,
+                'fecha'            => date('d-m-Y', strtotime($e->fecha_entrega)),
+                'departamento'     => $e->departamento->nombre
+                    ?? $e->salidaDetalle->departamento->nombre
+                        ?? 'Sin unidad',
+                'tipo'             => $e->salidaDetalle->tipoSalida->nombre ?? '—',
+                'cantidad'         => $e->cantidad,
+                'numero_solicitud' => $e->numero_solicitud ?: '—',
+                'observacion'      => $e->observacion ?: '—',
+            ]);
+        }
+
+        $totalEntregado = $filas->sum('cantidad');
+
+        // ── 6. Textos del encabezado ──────────────────────────────────────────
+        $fechaHoy   = date('d-m-Y', strtotime(Carbon::now('America/El_Salvador')));
+        $rangoTexto = ($desde !== '0' && $hasta !== '0')
+            ? 'Del ' . date('d-m-Y', strtotime($desde)) . ' al ' . date('d-m-Y', strtotime($hasta))
+            : 'Todo el historial';
+
+        // ── 7. PDF ────────────────────────────────────────────────────────────
+        $mpdf = new \Mpdf\Mpdf(['tempDir' => sys_get_temp_dir(), 'format' => 'LETTER']);
+        $mpdf->SetTitle('Historial de Entregas — ' . $material->nombre);
+        $mpdf->showImageErrors = false;
+
+        $logosantaana = 'images/logo.png';
+        $logoalcaldia = 'images/gobiernologo.jpg';
+
+        $html = "
+    <table style='width:100%; border-collapse:collapse;'>
+        <tr>
+            <td style='width:15%; text-align:left;'>
+                <img src='$logosantaana' style='max-width:100px; height:auto;'>
+            </td>
+            <td style='width:70%; text-align:center;'>
+                <h1 style='font-size:16px; margin:0; color:#003366; text-transform:uppercase;'>
+                    ALCALDÍA MUNICIPAL DE SANTA ANA NORTE
+                </h1>
+            </td>
+            <td style='width:15%; text-align:right;'>
+
+            </td>
+        </tr>
+    </table>
+    <hr style='border:none; border-top:2px solid #003366; margin:0;'>
+
+    <div style='text-align:center; margin-top:14px;'>
+        <h1 style='font-size:15px; margin:0; color:#1a5c4a; text-transform:uppercase;'>
+            HISTORIAL DE ENTREGAS REGISTRADAS — {$material->nombre}
+        </h1>
+        <p style='font-size:12px; margin:4px 0 2px 0; color:#444;'>
+            {$rangoTexto} &nbsp;|&nbsp; Impreso: {$fechaHoy}
+            &nbsp;|&nbsp; U.M: <strong>{$material->unidadMedida->nombre}</strong>
+        </p>
+    </div>
+    ";
+
+        if ($filas->isEmpty()) {
+            $html .= "
+        <p style='margin-top:30px; text-align:center; font-size:13px; color:#666;'>
+            No hay entregas registradas para este material en el período seleccionado.
+        </p>";
+        } else {
+            $html .= "
+        <table style='width:100%; border-collapse:collapse; margin-top:18px;'>
+            <thead>
+                <tr>
+                    <th style='border:1px solid #000; font-size:11px; padding:4px; text-align:center; background:#d4edda; width:10%;'>Fecha Entrega</th>
+                    <th style='border:1px solid #000; font-size:11px; padding:4px; text-align:center; background:#d4edda; width:26%;'>Unidad</th>
+                    <th style='border:1px solid #000; font-size:11px; padding:4px; text-align:center; background:#d4edda; width:16%;'>Tipo de salida</th>
+                    <th style='border:1px solid #000; font-size:11px; padding:4px; text-align:center; background:#d4edda; width:9%;'>Cantidad</th>
+                    <th style='border:1px solid #000; font-size:11px; padding:4px; text-align:center; background:#d4edda; width:13%;'>No. Solicitud</th>
+                    <th style='border:1px solid #000; font-size:11px; padding:4px; text-align:center; background:#d4edda; width:26%;'>Observación</th>
+                </tr>
+            </thead>
+            <tbody>
+        ";
+
+            foreach ($filas as $fila) {
+                $html .= "
+            <tr>
+                <td style='border:1px solid #000; font-size:11px; padding:3px; text-align:center; vertical-align:top;'>
+                    {$fila->fecha}
+                </td>
+                <td style='border:1px solid #000; font-size:11px; padding:3px; text-align:left; vertical-align:top;'>
+                    {$fila->departamento}
+                </td>
+                <td style='border:1px solid #000; font-size:11px; padding:3px; text-align:center; vertical-align:top;'>
+                    {$fila->tipo}
+                </td>
+                <td style='border:1px solid #000; font-size:11px; padding:3px; text-align:center; vertical-align:top;
+                    font-weight:bold;'>
+                    {$fila->cantidad}
+                </td>
+                <td style='border:1px solid #000; font-size:11px; padding:3px; text-align:center; vertical-align:top;'>
+                    {$fila->numero_solicitud}
+                </td>
+                <td style='border:1px solid #000; font-size:11px; padding:3px; text-align:left; vertical-align:top;'>
+                    " . htmlspecialchars($fila->observacion) . "
+                </td>
+            </tr>";
+            }
+
+            $html .= "
+            <tr>
+                <td colspan='3' style='border:1px solid #000; font-size:12px; padding:4px;
+                    text-align:right; font-weight:bold;'>
+                    Total entregado:
+                </td>
+                <td style='border:1px solid #000; font-size:12px; padding:4px;
+                    text-align:center; font-weight:bold;'>
+                    {$totalEntregado}
+                </td>
+                <td colspan='2' style='border:1px solid #000;'></td>
+            </tr>
+        </tbody></table>";
+        }
+
+        $stylesheet = file_get_contents('css/cssbodega.css');
+        $mpdf->WriteHTML($stylesheet, 1);
+        $mpdf->setFooter('Página: {PAGENO}/{nb}');
+        $mpdf->WriteHTML($html, 2);
+        $mpdf->Output();
+    }
+
+
+
+
 }
