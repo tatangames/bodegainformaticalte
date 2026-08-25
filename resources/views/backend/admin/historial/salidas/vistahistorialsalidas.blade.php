@@ -95,18 +95,22 @@
                         Entregas adicionales registradas
                     </h6>
                     <div class="table-responsive">
-                        <table class="table table-bordered table-sm mb-0" id="tabla-detalle-modal">
+                        <table class="table table-bordered table-striped table-sm">
                             <thead class="thead-dark">
                             <tr>
-                                <th style="width:4%">#</th>
-                                <th style="width:15%">Fecha Entrega</th>
-                                <th style="width:15%">N° Solicitud</th>   {{-- ← NUEVO --}}
-                                <th style="width:25%">Departamento</th>
-                                <th style="width:8%" class="text-center">Cantidad</th>
+                                <th>#</th>
+                                <th>Fecha</th>
+                                <th>N° Solicitud</th>
+                                <th>Departamento</th>
+                                <th class="text-center">Cantidad</th>
                                 <th>Observación</th>
                             </tr>
                             </thead>
-                            <tbody id="det-entregas-tbody"></tbody>
+                            <tbody id="det-entregas-tbody">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">—</td>
+                            </tr>
+                            </tbody>
                         </table>
                     </div>
 
@@ -230,12 +234,23 @@
                             </div>
                         </div>
                         <div class="row mt-3">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
+                                <label class="font-weight-bold">Objeto Específico</label>
+                                <select class="form-control" id="filtro-objeto">
+                                    <option value="">— Todos —</option>
+                                    @foreach($arrayObjetoEspecifico as $oe)
+                                        <option value="{{ $oe->id }}">
+                                            {{ $oe->codigo }} — {{ $oe->nombre }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-4">
                                 <label class="font-weight-bold">Buscar por material</label>
                                 <input type="text" class="form-control" id="filtro-material"
                                        placeholder="Nombre del material...">
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label class="font-weight-bold">N° Solicitud</label>
                                 <input type="text" class="form-control" id="filtro-solicitud"
                                        placeholder="Ej: SOL-001...">
@@ -257,12 +272,10 @@
                         </div>
                     </div>
                     <div class="card-body p-0">
-                        {{-- Estado inicial: instrucción --}}
                         <div id="div-instruccion" class="text-center text-muted py-5">
                             <i class="fas fa-search fa-3x mb-3 d-block"></i>
                             <p class="mb-0">Utiliza los filtros de arriba y presiona <strong>Buscar</strong> para ver el historial.</p>
                         </div>
-                        {{-- Tabla oculta hasta buscar --}}
                         <div id="div-tabla" style="display:none">
                             <div id="tablaDatatable"></div>
                         </div>
@@ -283,7 +296,7 @@
 
     <script>
 
-        const RUTA_TABLA  = "{{ url('/admin/historial/salidas/tabla') }}";
+        const RUTA_TABLA       = "{{ url('/admin/historial/salidas/tabla') }}";
         const RUTA_EDITAR_INFO = "{{ url('/admin/historial/salidas/informacion') }}";
         const RUTA_EDITAR_SAVE = "{{ url('/admin/historial/salidas/editar') }}";
         const RUTA_ELIMINAR    = "{{ url('/admin/historial/salidas/eliminar') }}";
@@ -312,6 +325,15 @@
                 dropdownParent: $('#modalEditar'),
                 language: { noResults: function () { return 'No encontrado'; } }
             });
+
+
+            $('#filtro-objeto').select2({
+                theme: 'bootstrap-5',
+                placeholder: '— Todos —',
+                allowClear: true,
+                language: { noResults: function () { return 'No encontrado'; } }
+            });
+
         });
 
         // ── Inicializar DataTable ─────────────────────────────────────
@@ -329,6 +351,11 @@
                 responsive:   true,
                 pagingType:   'full_numbers',
                 lengthMenu:   [[50, 100, -1], [50, 100, 'Todo']],
+                // Excluir la columna de acciones del ordenamiento y búsqueda
+                columnDefs: [
+                    { orderable: false, targets: [11] },
+                    { searchable: false, targets: [11] }
+                ],
                 language: {
                     sProcessing:   'Procesando...',
                     sLengthMenu:   'Mostrar _MENU_ registros',
@@ -349,7 +376,7 @@
                     "<'row align-items-center'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>"
             });
             $('#tabla-historial_length select').addClass('form-control form-control-sm');
-            $('#tabla-historial_filter input').addClass('form-control form-control-sm').css('display','inline-block');
+            $('#tabla-historial_filter input').addClass('form-control form-control-sm').css('display', 'inline-block');
         }
 
         // ── Buscar con filtros ────────────────────────────────────────
@@ -361,13 +388,15 @@
             const hasta     = $('#filtro-fecha-hasta').val();
             const material  = $('#filtro-material').val().trim();
             const solicitud = $('#filtro-solicitud').val().trim();
+            const objeto = $('#filtro-objeto').val();
 
-            if (tipo)      params.append('tiposalida',  tipo);
+            if (tipo)      params.append('tiposalida',   tipo);
             if (depto)     params.append('departamento', depto);
-            if (desde)     params.append('fecha_desde', desde);
-            if (hasta)     params.append('fecha_hasta', hasta);
-            if (material)  params.append('material',    material);
-            if (solicitud) params.append('solicitud',   solicitud);
+            if (desde)     params.append('fecha_desde',  desde);
+            if (hasta)     params.append('fecha_hasta',  hasta);
+            if (material)  params.append('material',     material);
+            if (solicitud) params.append('solicitud',    solicitud);
+            if (objeto) params.append('objeto_especifico', objeto);
 
             const url = RUTA_TABLA + (params.toString() ? '?' + params.toString() : '');
 
@@ -387,6 +416,7 @@
         function limpiarFiltros() {
             $('#filtro-tiposalida').val('').trigger('change');
             $('#filtro-departamento').val('').trigger('change');
+            $('#filtro-objeto').val('').trigger('change');   // ← NUEVO
             $('#filtro-fecha-desde').val('');
             $('#filtro-fecha-hasta').val('');
             $('#filtro-material').val('');
@@ -398,7 +428,6 @@
 
         // ── Ver detalle ───────────────────────────────────────────────
         function verDetalle(id) {
-            // Resetear
             $('#det-fecha').text('—');
             $('#det-tipo').text('—');
             $('#det-solicitud').text('—');
@@ -420,12 +449,12 @@
                     }
 
                     var s = response.data.salida;
-                    $('#det-fecha').text(s.fecha         ? formatearFecha(s.fecha) : '—');
-                    $('#det-tipo').text(s.tipo_salida    || '—');
+                    $('#det-fecha').text(s.fecha              ? formatearFecha(s.fecha) : '—');
+                    $('#det-tipo').text(s.tipo_salida         || '—');
                     $('#det-solicitud').text(s.numero_solicitud || '—');
                     $('#det-departamento').text(s.departamento  || '—');
-                    $('#det-material').text(s.material         || '—');
-                    $('#det-descripcion').text(s.descripcion   || '—');
+                    $('#det-material').text(s.material          || '—');
+                    $('#det-descripcion').text(s.descripcion    || '—');
 
                     var entregas = response.data.entregas;
                     $('#det-entregas-tbody').empty();
@@ -442,10 +471,10 @@
                             '<tr>' +
                             '<td>' + (i + 1) + '</td>' +
                             '<td>' + formatearFecha(e.fecha_entrega) + '</td>' +
-                            '<td>' + (e.numero_solicitud || '<span class="text-muted">—</span>') + '</td>' +   // ← NUEVO
-                            '<td>' + (e.departamento || '<span class="text-muted">Sin departamento</span>') + '</td>' +
+                            '<td>' + (e.numero_solicitud || '<span class="text-muted">—</span>') + '</td>' +
+                            '<td>' + (e.departamento     || '<span class="text-muted">Sin departamento</span>') + '</td>' +
                             '<td class="text-center">' + e.cantidad + '</td>' +
-                            '<td>' + (e.observacion || '<span class="text-muted">—</span>') + '</td>' +
+                            '<td>' + (e.observacion      || '<span class="text-muted">—</span>') + '</td>' +
                             '</tr>'
                         );
                     });
@@ -479,13 +508,12 @@
         }
 
         function guardarEdicion() {
-            var id         = $('#editar-id').val();
-            var fecha      = $('#editar-fecha').val().trim();
-            var tipo       = $('#editar-tiposalida').val();
-            var depto      = $('#editar-departamento').val();
-            var solicitud  = $('#editar-solicitud').val().trim();
+            var id          = $('#editar-id').val();
+            var fecha       = $('#editar-fecha').val().trim();
+            var tipo        = $('#editar-tiposalida').val();
+            var depto       = $('#editar-departamento').val();
+            var solicitud   = $('#editar-solicitud').val().trim();
             var descripcion = $('#editar-descripcion').val().trim();
-
             var estado      = $('#editar-estado').val();
 
             if (!fecha) { toastr.error('La fecha es requerida'); return; }
@@ -520,14 +548,14 @@
             Swal.fire({
                 title: '¿Eliminar esta salida?',
                 text: 'Esta acción no se puede deshacer.',
-                type: 'warning',                          // ← icon en lugar de type
+                type: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#d33',
                 cancelButtonColor: '#6c757d',
                 confirmButtonText: 'Sí, eliminar',
                 cancelButtonText: 'Cancelar'
             }).then(function (result) {
-                if (!result.value) return;                // ← result.value en lugar de result.isConfirmed
+                if (!result.value) return;
                 openLoading();
                 var formData = new FormData();
                 formData.append('id', id);

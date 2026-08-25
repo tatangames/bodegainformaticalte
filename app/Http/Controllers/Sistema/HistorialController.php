@@ -295,11 +295,13 @@ class HistorialController extends Controller
 // ── Index ─────────────────────────────────────────────────────────────────────
     public function indexHistorialSalidas()
     {
-        $arrayTipoSalida    = TipoSalida::orderBy('nombre')->get();
-        $arrayDepartamentos = Departamentos::orderBy('nombre')->get();
+        $arrayTipoSalida        = TipoSalida::orderBy('nombre')->get();
+        $arrayDepartamentos     = Departamentos::orderBy('nombre')->get();
+        $arrayObjetoEspecifico  = DB::table('objeto_especifico')->orderBy('codigo')->get();
+        $arraySalidas           = collect();
 
         return view('backend.admin.historial.salidas.vistahistorialsalidas',
-            compact('arrayTipoSalida', 'arrayDepartamentos'));
+            compact('arrayTipoSalida', 'arrayDepartamentos', 'arrayObjetoEspecifico', 'arraySalidas'));
     }
 
     // ── Tabla (cargada vía jQuery .load()) ───────────────────────────────────────
@@ -310,6 +312,7 @@ class HistorialController extends Controller
             ->join('materiales as m', 'm.id', '=', 'ed.id_material')
             ->leftJoin('tipo_salida as ts', 'ts.id', '=', 'sd.id_tiposalida')
             ->leftJoin('departamentos as dep', 'dep.id', '=', 'sd.id_departamento')
+            ->leftJoin('objeto_especifico as oe', 'oe.id', '=', 'm.id_objespecifico') // ← ajusta la FK según tu schema
             ->select(
                 'sd.id',
                 'sd.fecha',
@@ -320,6 +323,10 @@ class HistorialController extends Controller
                 'm.nombre as material',
                 'ts.nombre as tipo_salida',
                 'dep.nombre as departamento',
+                'ed.precio',
+                'oe.codigo as objeto_codigo',       // ← NUEVO
+                'oe.nombre as objeto_nombre',        // ← NUEVO
+                DB::raw('(sd.cantidad_salida * ed.precio) as subtotal'),
                 DB::raw('(SELECT COUNT(*) FROM salidas_detalle_entregas WHERE id_salida_detalle = sd.id) as total_entregas')
             )
             ->when($request->tiposalida, fn($q) =>
@@ -339,6 +346,9 @@ class HistorialController extends Controller
             )
             ->when($request->solicitud, fn($q) =>
             $q->where('sd.numero_solicitud', 'LIKE', '%' . $request->solicitud . '%')
+            )
+            ->when($request->objeto_especifico, fn($q) =>   // ← NUEVO filtro
+            $q->where('oe.id', $request->objeto_especifico)
             )
             ->orderBy('sd.fecha', 'desc')
             ->orderBy('sd.id', 'desc')
