@@ -59,12 +59,19 @@
                     <button class="btn btn-xs btn-info" onclick="verDetalle({{ $salida->id }})" title="Ver detalle">
                         <i class="fas fa-eye"></i>
                     </button>
-                    <button class="btn btn-xs btn-warning" onclick="modalEditar({{ $salida->id }})" title="Editar">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="btn btn-xs btn-danger" onclick="eliminar({{ $salida->id }})" title="Eliminar">
-                        <i class="fas fa-trash"></i>
-                    </button>
+
+                    @php
+                        $esMesActual = \Carbon\Carbon::parse($salida->fecha)->isSameMonth(\Carbon\Carbon::now());
+                    @endphp
+
+                    @if($esMesActual)
+                        <button class="btn btn-xs btn-warning" onclick="modalEditar({{ $salida->id }})" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-xs btn-danger" onclick="eliminar({{ $salida->id }})" title="Eliminar">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    @endif
                 </td>
             </tr>
         @empty
@@ -81,7 +88,7 @@
             <tfoot>
             <tr class="table-dark font-weight-bold">
                 <td colspan="8" class="text-right">TOTAL GENERAL:</td>
-                <td class="text-right text-warning">
+                <td class="text-right">
                     ${{ number_format($totalGeneral, 2) }}
                 </td>
                 <td colspan="3"></td>
