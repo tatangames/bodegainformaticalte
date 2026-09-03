@@ -261,7 +261,7 @@
                         </div>
                         <div class="reporte-body">
                             <p style="font-size:13px; color:#666; margin-bottom:14px;">
-                                Muestra las salidas de un material que ha estado pendiente, ejemplo las TINTAS
+                                Muestra las salidas de un material que tiene Estado pendiente, ejemplo las TINTAS
                             </p>
                             <hr class="divider">
 
