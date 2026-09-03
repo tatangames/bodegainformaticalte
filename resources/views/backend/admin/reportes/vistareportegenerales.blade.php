@@ -96,16 +96,29 @@
                             </p>
                             <hr class="divider">
 
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="toggle-conteo-inventario">
+                                <label class="form-check-label" for="toggle-conteo-inventario" style="font-size:13px;">
+                                    Incluir columna de conteo físico
+                                </label>
+                            </div>
+
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="toggle-pendientes-inventario" checked>
+                                <label class="form-check-label" for="toggle-pendientes-inventario" style="font-size:13px;">
+                                    Incluir tabla de Kits Pendientes/Abiertos
+                                </label>
+                            </div>
+
                             <div class="row">
                                 <div class="col-md-6 d-flex">
                                     <button type="button" onclick="generarPdfInventario()" class="btn-pdf"
                                             style="background: linear-gradient(135deg, #1a4a6b, #1a73e8); color:#fff;
-                               box-shadow: 0 4px 14px rgba(26,115,232,.35); margin-top:0;">
+               box-shadow: 0 4px 14px rgba(26,115,232,.35); margin-top:0;">
                                         <i class="fas fa-file-pdf"></i> Generar PDF
                                     </button>
                                 </div>
                             </div>
-
                         </div>
                     </div>
                 </div>
@@ -303,7 +316,11 @@
     <script>
 
         function generarPdfInventario() {
-            window.open("{{ url('admin/reporte/pdf/inventario') }}/", '_blank');
+            var conteo     = document.getElementById('toggle-conteo-inventario').checked ? 1 : 0;
+            var pendientes = document.getElementById('toggle-pendientes-inventario').checked ? 1 : 0;
+
+            var url = "{{ url('admin/reporte/pdf/inventario') }}/" + conteo + '/' + pendientes;
+            window.open(url, '_blank');
         }
 
         // ── Reporte de Entradas/Salidas por Período ────────────────────
@@ -456,6 +473,8 @@
 
             window.open(url, '_blank');
         }
+
+
 
 
 

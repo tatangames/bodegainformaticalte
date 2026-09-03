@@ -147,7 +147,9 @@ Route::middleware('auth:admin')->group(function () {
 
     // --- REPORTES ---
     Route::get('/admin/reporte/generales', [ReportesController::class,'vistaReporteGenerales'])->name('admin.reporte.generales.index');
-    Route::get('/admin/reporte/pdf/inventario', [ReportesController::class,'generarPDFExistencias']);
+    Route::get('/admin/reporte/pdf/inventario/{conteo?}/{pendientes?}', [ReportesController::class,'generarPDFExistencias']);
+
+
     Route::get('/admin/bodega/reportespdf/inicial/final/{desde}/{hasta}', [ReportesController::class, 'reportePDFInicialPorPeriodos']);
 
     // PDF - ITEM ENTREGADO A UNIDADES

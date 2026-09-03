@@ -39,372 +39,437 @@ class ReportesController extends Controller
     }
 
 
-    public function generarPDFExistencias()
+
+
+    public function generarPDFExistencias($conteo = 0, $pendientes = 1)
     {
-        // ── Existencias actuales: entradas_detalle con cantidad disponible > 0 ──
-        $arrayInfo = EntradasDetalle::with('material.objetoEspecifico', 'material.unidadMedida', 'entrada')
+        $incluirConteo     = (bool) $conteo;
+        $incluirPendientes = (bool) $pendientes;
+
+        $fechaFormat  = date("d-m-Y", strtotime(Carbon::now('America/El_Salvador')));
+        $logoalcaldia = 'images/logo.png';
+
+        // ── Consulta principal: existencias actuales (entradas - salidas) ──────────
+        $filas = DB::table('entradas_detalle as ed')
+            ->join('materiales as m', 'm.id', '=', 'ed.id_material')
+            ->leftJoin('unidadmedida as um', 'um.id', '=', 'm.id_medida')
+            ->leftJoin('objeto_especifico as obj', 'obj.id', '=', 'm.id_objespecifico')
+            ->leftJoin(DB::raw('(
+        SELECT id_entrada_detalle, SUM(cantidad_salida) as total_salido
+        FROM salidas_detalle GROUP BY id_entrada_detalle
+    ) as sd'), 'sd.id_entrada_detalle', '=', 'ed.id')
+            ->selectRaw('
+        m.id as id_material,
+        m.nombre,
+        COALESCE(um.nombre, "—") as medida,
+        COALESCE(obj.codigo, "SIN-CODIGO") as codigo,
+        ed.precio as precio_unitario,
+        (ed.cantidad_inicial - COALESCE(sd.total_salido, 0)) as disponible
+    ')
+            ->havingRaw('disponible > 0')
+            ->orderBy('obj.codigo')
+            ->orderBy('m.nombre')
+            ->orderBy('ed.precio')
             ->get();
 
-        $totalColumna = 0;
-        $arrayDetalle = collect();
-        $arrayPendientes = collect();
+        // ── Agrupar por código → material → lotes ────────────────────────────────
+        $porCodigo = [];
 
-        foreach ($arrayInfo as $fila) {
+        foreach ($filas as $fila) {
+            $codigo     = $fila->codigo;
+            $idMaterial = $fila->id_material;
+            $precio     = $fila->precio_unitario;
 
-            $material = $fila->material;
-
-            if (!$material) {
-                continue;
+            if (!isset($porCodigo[$codigo])) {
+                $porCodigo[$codigo] = ['codigo' => $codigo, 'materiales' => []];
             }
 
-            $objEspecifico = $material->objetoEspecifico ?? null;
+            if (!isset($porCodigo[$codigo]['materiales'][$idMaterial])) {
+                $porCodigo[$codigo]['materiales'][$idMaterial] = [
+                    'nombre' => $fila->nombre,
+                    'medida' => $fila->medida,
+                    'lotes'  => [],
+                ];
+            }
 
-            $totalSalido = SalidasDetalle::where('id_entrada_detalle', $fila->id)
-                ->sum('cantidad_salida');
+            if (isset($porCodigo[$codigo]['materiales'][$idMaterial]['lotes'][$precio])) {
+                $porCodigo[$codigo]['materiales'][$idMaterial]['lotes'][$precio] += $fila->disponible;
+            } else {
+                $porCodigo[$codigo]['materiales'][$idMaterial]['lotes'][$precio]  = $fila->disponible;
+            }
+        }
 
-            $cantidadActual =
-                (int) $fila->cantidad_inicial
-                - (int) $totalSalido;
+        foreach ($porCodigo as &$grupo) {
+            uasort($grupo['materiales'], fn($a, $b) => strcmp($a['nombre'], $b['nombre']));
+            foreach ($grupo['materiales'] as &$mat) {
+                ksort($mat['lotes']);
+            }
+            unset($mat);
+        }
+        unset($grupo);
+        ksort($porCodigo);
 
-            // ==========================================
-            // SOLO PENDIENTES
-            // ==========================================
-            $pendientesQuery = SalidasDetalle::where(
-                'id_entrada_detalle',
-                $fila->id
-            )
-                ->where('estado', 'pendiente')
-                ->orderBy('id', 'asc')
-                ->get();
+        // ── Resumen valorizado por código ────────────────────────────────────────
+        $resumenPorCodigo = [];
+        $granTotal        = 0;
 
-            foreach ($pendientesQuery as $pend) {
+        foreach ($porCodigo as $codigo => $grupo) {
+            $subtotal = 0;
+            foreach ($grupo['materiales'] as $mat) {
+                foreach ($mat['lotes'] as $precio => $stock) {
+                    $subtotal += ($precio * $stock);
+                }
+            }
+            $resumenPorCodigo[$codigo] = $subtotal;
+            $granTotal += $subtotal;
+        }
 
-                $entregas =
-                    SalidasDetalleEntregas::where(
-                        'id_salida_detalle',
-                        $pend->id
-                    )
+        // ── PENDIENTES / KITS ABIERTOS (solo si el toggle lo pide) ─────────────────
+        $arrayPendientes = collect();
+
+        if ($incluirPendientes) {
+            $entradasDetalle = EntradasDetalle::with('material.unidadMedida')->get();
+
+            foreach ($entradasDetalle as $ed) {
+                $material = $ed->material;
+                if (!$material) {
+                    continue;
+                }
+
+                $pendientesQuery = SalidasDetalle::where('id_entrada_detalle', $ed->id)
+                    ->where('estado', 'pendiente')
+                    ->orderBy('id', 'asc')
+                    ->get();
+
+                foreach ($pendientesQuery as $pend) {
+                    $entregas = SalidasDetalleEntregas::where('id_salida_detalle', $pend->id)
                         ->orderBy('fecha_entrega', 'asc')
                         ->get();
 
-                $arrayPendientes->push((object)[
-                    'nombreMaterial'  =>
-                        $material->nombre ?? '',
-
-                    'cantidad_salida' =>
-                        $pend->cantidad_salida,
-
-                    'unidadMedida' =>
-                        $material->unidadMedida->nombre ?? '',
-
-                    'descripcion' =>
-                        $pend->descripcion ?? '',
-
-                    'entregas' =>
-                        $entregas,
-                ]);
+                    $arrayPendientes->push((object)[
+                        'nombreMaterial'  => $material->nombre ?? '',
+                        'cantidad_salida' => $pend->cantidad_salida,
+                        'unidadMedida'    => $material->unidadMedida->nombre ?? '',
+                        'descripcion'     => $pend->descripcion ?? '',
+                        'entregas'        => $entregas,
+                    ]);
+                }
             }
 
-            // ==========================================
-            // SOLO EXISTENCIAS > 0
-            // ==========================================
-            if ($cantidadActual <= 0) {
-                continue;
-            }
-
-            $multiplicado =
-                $cantidadActual * $fila->precio;
-
-            $totalColumna += $multiplicado;
-
-            $arrayDetalle->push((object)[
-                'lote' =>
-                    $fila->entrada->lote ?? '',
-
-                'nombreMaterial' =>
-                    $material->nombre ?? '',
-
-                'unidadMedida' =>
-                    $material->unidadMedida->nombre ?? '',
-
-                'cantidadActual' =>
-                    $cantidadActual,
-
-                'precioFormat' =>
-                    "$" . number_format(
-                        (float)$fila->precio,
-                        4,
-                        '.',
-                        ','
-                    ),
-
-                'multiplicado' =>
-                    "$" . number_format(
-                        (float)$multiplicado,
-                        2,
-                        '.',
-                        ','
-                    ),
-
-                'nombreCodigo' =>
-                    $objEspecifico->codigo ?? '',
-            ]);
+            $arrayPendientes = $arrayPendientes->sortBy('nombreMaterial')->values();
         }
 
-        $totalColumnaFmt = "$" . number_format((float)$totalColumna, 2, '.', ',');
-        $arrayDetalle = $arrayDetalle->sortBy('nombreMaterial')->values();
-        $arrayPendientes = $arrayPendientes->sortBy('nombreMaterial')->values();
-        $fechaFormat = date("d-m-Y", strtotime(Carbon::now('America/El_Salvador')));
-
-        $mpdf = new \Mpdf\Mpdf(['tempDir' => sys_get_temp_dir(), 'format' => 'LETTER']);
-        $mpdf->SetTitle('Existencias General');
+        // ── mPDF — HORIZONTAL ────────────────────────────────────────────────────
+        $mpdf = new \Mpdf\Mpdf([
+            'tempDir'     => sys_get_temp_dir(),
+            'format'      => 'LETTER',
+            'orientation' => 'L',
+        ]);
+        $mpdf->SetTitle('Inventario Actual de Materiales');
         $mpdf->showImageErrors = false;
 
-        $logoalcaldia = 'images/gobiernologo.jpg';
-        $logosantaana = 'images/logo.png';
+        // ── Estilos ───────────────────────────────────────────────────────────────
+        $thStyle = "font-weight:bold; font-size:10px; border:0.8px solid #000;
+            padding:8px 4px; background:#d9e1f2; text-align:center;";
+        $tdStyle = "font-size:10px; border:0.8px solid #000; padding:7px 4px;";
+        $tdC     = $tdStyle . " text-align:center;";
+        $tdR     = $tdStyle . " text-align:right;";
+        $tdLote  = $tdStyle . " text-align:center; background:#f7f9fd;";
+        $tdLoteR = $tdStyle . " text-align:right;  background:#f7f9fd;";
 
+        // ── Encabezado ────────────────────────────────────────────────────────────
         $tabla = "
-    <table style='width: 100%; border-collapse: collapse;'>
-        <tr>
-            <td style='width: 15%; text-align: left;'>
-                <img src='$logosantaana' alt='Santa Ana Norte' style='max-width: 100px; height: auto;'>
-            </td>
-            <td style='width: 60%; text-align: center;'>
-                <h1 style='font-size: 16px; margin: 0; color: #003366; text-transform: uppercase;'>
-                    ALCALDÍA MUNICIPAL DE SANTA ANA NORTE
-                </h1>
-            </td>
-            <td style='width: 10%; text-align: right;'>
-                <img src='$logoalcaldia' alt='Gobierno de El Salvador' style='max-width: 60px; height: auto;'>
-            </td>
-        </tr>
-    </table>
-
-    <hr style='border: none; border-top: 2px solid #003366; margin: 0;'>
-    ";
-
-        $tabla .= "
-    <div style='text-align: center; margin-top: 20px;'>
-        <h1 style='font-size: 15px; margin: 0; color: #000;'>EXISTENCIAS</h1>
-    </div>
-
-    <div style='text-align: left; margin-top: 10px;'>
-        <p style='font-size: 13px; margin: 0; color: #000;'>
-            Fecha: $fechaFormat
-        </p>
-    </div>
-    ";
-
-        // ── Tabla principal ──
-        $tabla .= "
-    <table id='tablaFor'
-           style='width: 100%;
-                  border-collapse: collapse;
-                  margin-top: 35px'>
-
-        <tbody>
-
+<table width='100%' style='border-collapse:collapse; font-family:Arial, sans-serif;'>
+<tr>
+    <td style='width:20%; border:0.8px solid #000; padding:6px 8px;'>
+        <table width='100%'>
             <tr>
-                <th style='text-align: center; font-size:15px; width: 65%; font-weight: bold; border: 1px solid black;'>
-                    Producto
-                </th>
-
-                <th style='text-align: center; font-size:15px; width: 12%; font-weight: bold; border: 1px solid black;'>
-                    U.M
-                </th>
-
-                <th style='text-align: center; font-size:15px; width: 13%; font-weight: bold; border: 1px solid black;'>
-                    Cantidad
-                </th>
-
-                <th style='text-align: center; font-size:15px; width: 14%; font-weight: bold; border: 1px solid black;'>
-                    Obj. Específico
-                </th>
+                <td style='width:30%; text-align:left;'>
+                    <img src='{$logoalcaldia}' style='height:38px'>
+                </td>
+                <td style='width:70%; text-align:left; color:#104e8c;
+                            font-size:13px; font-weight:bold; line-height:1.3;'>
+                    SANTA ANA NORTE<br>EL SALVADOR
+                </td>
             </tr>
-    ";
+        </table>
+    </td>
+    <td style='width:60%; border-top:0.8px solid #000; border-bottom:0.8px solid #000;
+               padding:6px 8px; text-align:center; font-size:15px; font-weight:bold;'>
+        REPORTE INVENTARIO ACTUAL DE MATERIALES
+    </td>
+    <td style='width:20%; border:0.8px solid #000; padding:0; vertical-align:top;'>
+        <table width='100%' style='font-size:10px;'>
+            <tr>
+                <td width='40%' style='border-right:0.8px solid #000;
+                                       border-bottom:0.8px solid #000; padding:4px 6px;'>
+                    <strong>Código:</strong>
+                </td>
+                <td width='60%' style='border-bottom:0.8px solid #000;
+                                       padding:4px 6px; text-align:center;'></td>
+            </tr>
+            <tr>
+                <td style='border-right:0.8px solid #000;
+                           border-bottom:0.8px solid #000; padding:4px 6px;'>
+                    <strong>Versión:</strong>
+                </td>
+                <td style='border-bottom:0.8px solid #000;
+                           padding:4px 6px; text-align:center;'>000</td>
+            </tr>
+            <tr>
+                <td style='border-right:0.8px solid #000; padding:4px 6px;'>
+                    <strong>Fecha de vigencia:</strong>
+                </td>
+                <td style='padding:4px 6px; text-align:center;'></td>
+            </tr>
+        </table>
+    </td>
+</tr>
+</table>
+<br>";
 
-        foreach ($arrayDetalle as $fila) {
+        $tabla .= "
+<table width='100%' style='margin-bottom:4px; border-collapse:collapse;'>
+<tr>
+    <td style='font-size:13px; padding:4px 0;'>
+        <span style='font-weight:bold;'>Reporte:</span>
+            Existencias actuales de materiales<br>
+        <span style='font-weight:bold;'>Fecha de generación:</span> {$fechaFormat}
+    </td>
+</tr>
+</table>";
 
-            $tabla .= "
-        <tr>
-
-            <td style='text-align: left; font-size:14px; border: 1px solid black; padding: 3px;'>
-                $fila->nombreMaterial
-            </td>
-
-            <td style='text-align: center; font-size:14px; border: 1px solid black;'>
-                $fila->unidadMedida
-            </td>
-
-            <td style='text-align: center; font-size:14px; border: 1px solid black;'>
-                $fila->cantidadActual
-            </td>
-
-            <td style='text-align: center; font-size:14px; border: 1px solid black;'>
-                $fila->nombreCodigo
-            </td>
-
-        </tr>";
+        // ── Anchos de columna (se ajustan si hay columna de conteo) ────────────────
+        if ($incluirConteo) {
+            $wObj = '10%'; $wMat = '28%'; $wMed = '9%';
+            $wPrecio = '11%'; $wStock = '8%'; $wTotal = '9%';
+            $wConteo = '13%'; $wDiferencia = '12%';
+            $colspan = 8;
+        } else {
+            $wObj = '12%'; $wMat = '38%'; $wMed = '11%';
+            $wPrecio = '13%'; $wStock = '10%'; $wTotal = '10%';
+            $wConteo = null; $wDiferencia = null;
+            $colspan = 6;
         }
 
-        $tabla .= "</tbody></table>";
+        // ── Tabla detalle ─────────────────────────────────────────────────────────
+        $thConteo = $incluirConteo
+            ? "<th style='{$thStyle} width:{$wConteo};'>Conteo Físico</th>
+           <th style='{$thStyle} width:{$wDiferencia};'>Diferencia</th>"
+            : "";
 
-        // ── Tabla de pendientes ──
-        if ($arrayPendientes->isNotEmpty()) {
+        $tabla .= "
+<table width='100%' style='border-collapse:collapse;'>
+<thead>
+    <tr>
+        <th style='{$thStyle} width:{$wObj};'>Obj. Espec.</th>
+        <th style='{$thStyle} width:{$wMat};'>Material</th>
+        <th style='{$thStyle} width:{$wMed};'>Medida</th>
+        <th style='{$thStyle} width:{$wPrecio};'>Precio Unit.</th>
+        <th style='{$thStyle} width:{$wStock};'>Stock Actual</th>
+        <th style='{$thStyle} width:{$wTotal};'>Total</th>
+        {$thConteo}
+    </tr>
+</thead>
+<tbody>";
+
+        if (empty($porCodigo)) {
+            $tabla .= "
+    <tr>
+        <td colspan='{$colspan}' style='text-align:center; font-size:12px;
+                                        border:0.8px solid #000; padding:12px; color:#888;'>
+            No se encontraron materiales con existencias disponibles.
+        </td>
+    </tr>";
+        } else {
+            foreach ($porCodigo as $grupo) {
+
+                $tabla .= "
+    <tr>
+        <td colspan='{$colspan}' style='font-weight:bold; font-size:10px;
+                                        border:0.8px solid #000; padding:5px 8px;
+                                        background:#e8eef8;'>
+            Objeto Específico: " . e($grupo['codigo']) . "
+        </td>
+    </tr>";
+
+                foreach ($grupo['materiales'] as $mat) {
+
+                    $lotes       = $mat['lotes'];
+                    $totalLotes  = count($lotes);
+                    $esElPrimero = true;
+
+                    foreach ($lotes as $precio => $stock) {
+
+                        $totalLote   = $precio * $stock;
+                        $esLoteExtra = !$esElPrimero;
+
+                        if (!$esLoteExtra) {
+                            $celdaNombre = "<td style='{$tdStyle}'>" . e($mat['nombre']) . "</td>
+                                 <td style='{$tdC}'>" . e($mat['medida']) . "</td>";
+                            $bgCodigo    = $tdC;
+                        } else {
+                            $celdaNombre = "<td style='{$tdLote}'></td>
+                                 <td style='{$tdLote}'></td>";
+                            $bgCodigo    = $tdLote;
+                        }
+
+                        $celdaConteo = $incluirConteo
+                            ? "<td style='" . ($esLoteExtra ? $tdLote : $tdC) . "'>&nbsp;</td>
+                           <td style='" . ($esLoteExtra ? $tdLote : $tdC) . "'>&nbsp;</td>"
+                            : "";
+
+                        $tabla .= "
+    <tr>
+        <td style='{$bgCodigo}'>" . (!$esLoteExtra ? e($grupo['codigo']) : '') . "</td>
+        {$celdaNombre}
+        <td style='" . ($esLoteExtra ? $tdLoteR : $tdR) . "'>
+            $ " . number_format($precio, 2, '.', ',') . "
+        </td>
+        <td style='" . ($esLoteExtra ? $tdLote : $tdC) . " font-weight:bold;'>
+            " . number_format($stock, 0, '.', ',') . "
+        </td>
+        <td style='" . ($esLoteExtra ? $tdLoteR : $tdR) . " font-weight:bold;'>
+            $ " . number_format($totalLote, 2, '.', ',') . "
+        </td>
+        {$celdaConteo}
+    </tr>";
+
+                        $esElPrimero = false;
+                    }
+
+                    // ── Subtotal del material (solo si tiene más de 1 lote) ────────
+                    if ($totalLotes > 1) {
+                        $stockTotal = array_sum($lotes);
+                        $valorTotal = array_sum(array_map(
+                            fn($p, $s) => $p * $s,
+                            array_keys($lotes),
+                            array_values($lotes)
+                        ));
+
+                        $celdaConteoSub = $incluirConteo
+                            ? "<td style='{$tdC} background:#eef2fb;'>&nbsp;</td>
+                           <td style='{$tdC} background:#eef2fb;'>&nbsp;</td>"
+                            : "";
+
+                        $tabla .= "
+    <tr>
+        <td colspan='4' style='{$tdStyle} text-align:right; font-style:italic;
+                                background:#eef2fb; font-size:10px;'>
+            Subtotal: " . e($mat['nombre']) . "
+        </td>
+        <td style='{$tdC} font-weight:bold; background:#eef2fb;'>
+            " . number_format($stockTotal, 0, '.', ',') . "
+        </td>
+        <td style='{$tdR} font-weight:bold; background:#eef2fb;'>
+            $ " . number_format($valorTotal, 2, '.', ',') . "
+        </td>
+        {$celdaConteoSub}
+    </tr>";
+                    }
+                }
+            }
+        }
+
+        $tabla .= "
+</tbody>
+</table>";
+
+        // ── Tabla resumen valorizado ──────────────────────────────────────────────
+        if (!empty($resumenPorCodigo)) {
+            $tabla .= "
+<br>
+<table width='45%' style='border-collapse:collapse; font-family:Arial, sans-serif; margin-left:auto;'>
+<thead>
+    <tr>
+        <th colspan='2' style='{$thStyle} font-size:12px; background:#104e8c; color:#fff;'>
+            RESUMEN VALORIZADO POR OBJETO ESPECÍFICO
+        </th>
+    </tr>
+    <tr>
+        <th style='{$thStyle} width:70%;'>Objeto Específico</th>
+        <th style='{$thStyle} width:30%;'>Total Valorizado</th>
+    </tr>
+</thead>
+<tbody>";
+
+            foreach ($resumenPorCodigo as $codigo => $subtotal) {
+                $tabla .= "
+    <tr>
+        <td style='{$tdStyle}'>" . e($codigo) . "</td>
+        <td style='{$tdR} font-weight:bold;'>$ " . number_format($subtotal, 2, '.', ',') . "</td>
+    </tr>";
+            }
 
             $tabla .= "
-        <div style='text-align: left; margin-top: 25px;'>
-            <h1 style='font-size: 14px; margin: 0; color: #000;'>
-                KITS PENDIENTES / ABIERTOS
-            </h1>
-        </div>
-        ";
+    <tr>
+        <td style='{$tdStyle} text-align:right; font-weight:bold;
+                    background:#d9e1f2; font-size:12px;'>
+            GRAN TOTAL:
+        </td>
+        <td style='{$tdR} font-weight:bold; background:#d9e1f2; font-size:12px;'>
+            $ " . number_format($granTotal, 2, '.', ',') . "
+        </td>
+    </tr>
+</tbody>
+</table>";
+        }
+
+        // ── Kits pendientes / abiertos (solo si el toggle está activo) ─────────────
+        if ($incluirPendientes && $arrayPendientes->isNotEmpty()) {
 
             $tabla .= "
-        <table id='tablaPendientes'
-               style='width: 100%;
-                      border-collapse: collapse;
-                      margin-top: 10px'>
-
-            <tbody>
-
-                <tr>
-
-                    <th style='text-align:center;
-                               font-size:14px;
-                               width:28%;
-                               font-weight:bold;
-                               border:1px solid black;'>
-
-                        Producto
-                    </th>
-
-                    <th style='text-align:center;
-                               font-size:14px;
-                               width:12%;
-                               font-weight:bold;
-                               border:1px solid black;'>
-
-                        Cant. Salida
-                    </th>
-
-                    <th style='text-align:center;
-                               font-size:14px;
-                               width:25%;
-                               font-weight:bold;
-                               border:1px solid black;'>
-
-                        Descripción Salida
-                    </th>
-
-                    <th style='text-align:center;
-                               font-size:14px;
-                               width:35%;
-                               font-weight:bold;
-                               border:1px solid black;'>
-
-                        Detalle de entregas
-                    </th>
-
-                </tr>
-        ";
+<br>
+<div style='text-align:left; margin-top:10px;'>
+    <h1 style='font-size:13px; margin:0; color:#000;'>KITS PENDIENTES / ABIERTOS</h1>
+</div>
+<table width='100%' style='border-collapse:collapse; margin-top:8px;'>
+<thead>
+    <tr>
+        <th style='{$thStyle} width:28%;'>Producto</th>
+        <th style='{$thStyle} width:12%;'>Cant. Salida</th>
+        <th style='{$thStyle} width:25%;'>Descripción Salida</th>
+        <th style='{$thStyle} width:35%;'>Detalle de entregas</th>
+    </tr>
+</thead>
+<tbody>";
 
             foreach ($arrayPendientes as $pend) {
 
-                $detalleEntregas = '';
-
                 if ($pend->entregas->isEmpty()) {
-
-                    $detalleEntregas =
-                        "<span style='font-style: italic; color:#888;'>
-                        Sin entregas registradas
-                    </span>";
-
+                    $detalleEntregas = "<span style='font-style:italic; color:#888;'>Sin entregas registradas</span>";
                 } else {
-
                     $lineas = [];
-
                     foreach ($pend->entregas as $ent) {
-
-                        $fechaEnt = date(
-                            'd-m-Y',
-                            strtotime($ent->fecha_entrega)
-                        );
-
                         $obs = $ent->observacion ?: '—';
-
-                        $lineas[] =
-                            "{$ent->cantidad} {$pend->unidadMedida}
-                        — {$obs}";
+                        $lineas[] = "{$ent->cantidad} {$pend->unidadMedida} — {$obs}";
                     }
-
                     $detalleEntregas = implode('<br>', $lineas);
                 }
 
-                $descripcionSalida =
-                    !empty($pend->descripcion)
-                        ? $pend->descripcion
-                        : '—';
+                $descripcionSalida = !empty($pend->descripcion) ? $pend->descripcion : '—';
 
                 $tabla .= "
-            <tr>
-
-                <td style='text-align:left;
-                           font-size:14px;
-                           border:1px solid black;
-                           padding:3px;
-                           vertical-align:top;'>
-
-                    {$pend->nombreMaterial}
-                </td>
-
-                <td style='text-align:center;
-                           font-size:14px;
-                           border:1px solid black;
-                           vertical-align:top;'>
-
-                    {$pend->cantidad_salida}
-                    {$pend->unidadMedida}
-                </td>
-
-                <td style='text-align:left;
-                           font-size:13px;
-                           border:1px solid black;
-                           padding:3px;
-                           vertical-align:top;'>
-
-                    {$descripcionSalida}
-                </td>
-
-                <td style='text-align:left;
-                           font-size:14px;
-                           border:1px solid black;
-                           padding:3px;'>
-
-                    {$detalleEntregas}
-                </td>
-
-            </tr>";
+    <tr>
+        <td style='{$tdStyle} text-align:left; vertical-align:top;'>{$pend->nombreMaterial}</td>
+        <td style='{$tdC} vertical-align:top;'>{$pend->cantidad_salida} {$pend->unidadMedida}</td>
+        <td style='{$tdStyle} text-align:left; vertical-align:top;'>{$descripcionSalida}</td>
+        <td style='{$tdStyle} text-align:left;'>{$detalleEntregas}</td>
+    </tr>";
             }
 
             $tabla .= "
-            </tbody>
-        </table>";
+</tbody>
+</table>";
         }
 
+        // ── Render ────────────────────────────────────────────────────────────────
         $stylesheet = file_get_contents('css/cssbodega.css');
-
         $mpdf->WriteHTML($stylesheet, 1);
-
-        $mpdf->setFooter('Página: {PAGENO}/{nb}');
-
+        $mpdf->setFooter("Página: " . '{PAGENO}' . "/" . '{nb}');
         $mpdf->WriteHTML($tabla, 2);
-
         $mpdf->Output();
     }
-
-
-
 
 
 
