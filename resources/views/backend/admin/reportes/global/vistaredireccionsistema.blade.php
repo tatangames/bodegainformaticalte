@@ -235,7 +235,7 @@
 
         {{-- Sistema 7 --}}
         <a href="http://190.86.196.105/obradebanco.com/" target="_blank" rel="noopener noreferrer" class="sys-card">
-            <div class="sys-icon ic-green">
+            <div class="sys-icon ic-blue">
                 <i class="ti ti-settings" aria-hidden="true"></i>
             </div>
             <p class="sys-name">Obra de Banco</p>
@@ -247,7 +247,7 @@
 
         {{-- Sistema 8 --}}
         <a href="http://190.86.196.105/proveeduria.com/" target="_blank" rel="noopener noreferrer" class="sys-card">
-            <div class="sys-icon ic-green">
+            <div class="sys-icon ic-purple">
                 <i class="ti ti-building-warehouse" aria-hidden="true"></i>
             </div>
             <p class="sys-name">Proveeduria y bodega</p>
@@ -270,7 +270,7 @@
 
         {{-- Sistema 10 --}}
         <a href="http://190.86.196.105/informatica.com/" target="_blank" rel="noopener noreferrer" class="sys-card">
-            <div class="sys-icon ic-green">
+            <div class="sys-icon ic-teal">
                 <i class="ti ti-device-desktop" aria-hidden="true"></i>
             </div>
             <p class="sys-name">Tecnología de la información</p>
@@ -293,7 +293,7 @@
 
         {{-- Sistema 12 --}}
         <a href="http://190.86.196.105/activobodega.com/" target="_blank" rel="noopener noreferrer" class="sys-card">
-            <div class="sys-icon ic-green">
+            <div class="sys-icon ic-red">
                 <i class="ti ti-settings" aria-hidden="true"></i>
             </div>
             <p class="sys-name">Inventario y Activo Fijo</p>
@@ -301,6 +301,18 @@
                 <i class="ti ti-external-link"></i> Ingresar
             </span>
         </a>
+
+        {{-- Sistema 13 --}}
+        <a href="http://190.86.196.105/mercados.com/" target="_blank" rel="noopener noreferrer" class="sys-card">
+            <div class="sys-icon ic-blue">
+                <i class="ti ti-settings" aria-hidden="true"></i>
+            </div>
+            <p class="sys-name">Mercados</p>
+            <span class="sys-link">
+                <i class="ti ti-external-link"></i> Ingresar
+            </span>
+        </a>
+
 
 
     </div>
