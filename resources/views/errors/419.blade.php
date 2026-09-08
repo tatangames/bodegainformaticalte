@@ -43,11 +43,25 @@
         <section class="content-header">
             <div class="container-fluid">
                 <section class="content">
-                    <div class="error-page">
-                        <h2 class="headline text-danger">419</h2>
+                    <div class="error-page" style="margin-top: 40px;">
+                        <h2 class="headline text-warning" style="font-size: 90px;">
+                            419
+                        </h2>
 
-                        <div class="error-content">
-                            <h3><i class="fas fa-exclamation-triangle text-danger"></i> Oops! Error 419.</h3>
+                        <div class="error-content" style="margin-left: 0; text-align: center;">
+                            <h3 class="mb-3">
+                                <i class="fas fa-clock text-warning"></i> Tu sesión ha expirado
+                            </h3>
+
+                            <p class="text-muted" style="font-size: 16px;">
+                                Por favor, inicia sesión nuevamente para continuar.
+                            </p>
+
+                            <div class="mt-4">
+                                <a href="{{ route('login.admin') }}" class="btn btn-warning btn-lg">
+                                    <i class="fas fa-sign-in-alt mr-2"></i> Volver al inicio de sesión
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </section>

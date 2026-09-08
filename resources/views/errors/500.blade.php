@@ -43,11 +43,30 @@
         <section class="content-header">
             <div class="container-fluid">
                 <section class="content">
-                    <div class="error-page">
-                        <h2 class="headline text-danger">500</h2>
+                    <div class="error-page" style="margin-top: 40px;">
+                        <h2 class="headline text-danger" style="font-size: 90px;">
+                            500
+                        </h2>
 
-                        <div class="error-content">
-                            <h3><i class="fas fa-exclamation-triangle text-danger"></i> Oops! Error 500.</h3>
+                        <div class="error-content" style="margin-left: 0; text-align: center;">
+                            <h3 class="mb-3">
+                                <i class="fas fa-exclamation-triangle text-danger"></i> Ha ocurrido un error interno
+                            </h3>
+
+                            <p class="text-muted" style="font-size: 16px;">
+                                Algo salió mal en el servidor. Intenta nuevamente o vuelve
+                                al inicio de sesión. Si el problema persiste, contacta al administrador del sistema.
+                            </p>
+
+                            <div class="mt-4">
+                                <a href="{{ route('login.admin') }}" class="btn btn-danger btn-lg">
+                                    <i class="fas fa-sign-in-alt mr-2"></i> Volver al inicio de sesión
+                                </a>
+
+                                <a href="javascript:history.back()" class="btn btn-outline-secondary btn-lg ml-2">
+                                    <i class="fas fa-arrow-left mr-2"></i> Regresar
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </section>
