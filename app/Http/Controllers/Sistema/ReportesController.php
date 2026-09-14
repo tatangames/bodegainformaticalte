@@ -472,92 +472,88 @@ class ReportesController extends Controller
     }
 
 
-
-
-
-
     public function reportePDFInicialPorPeriodos($desde, $hasta)
     {
         $start = Carbon::parse($desde)->startOfDay();
-        $end   = Carbon::parse($hasta)->endOfDay();
+        $end = Carbon::parse($hasta)->endOfDay();
 
         $desdeFormat = Carbon::parse($desde)->format('d/m/Y');
         $hastaFormat = Carbon::parse($hasta)->format('d/m/Y');
 
         $rows = DB::select("
-        WITH movimientos AS (
-
-            SELECT
-                ed.id_material,
-                COALESCE(NULLIF(oe.codigo, ''), 'SIN-CODIGO') AS codigo,
-                m.nombre AS descripcion,
-                ed.precio,
-                e.fecha AS fecha_movimiento,
-                ed.cantidad_inicial AS entrada,
-                0 AS salida,
-                (ed.cantidad_inicial * ed.precio) AS monto_entrada,
-                0 AS monto_salida
-            FROM entradas_detalle ed
-            INNER JOIN entradas e ON e.id = ed.id_entradas
-            INNER JOIN materiales m ON m.id = ed.id_material
-            LEFT JOIN objeto_especifico oe ON oe.id = m.id_objespecifico
-
-            UNION ALL
-
-            SELECT
-                ed.id_material,
-                COALESCE(NULLIF(oe.codigo, ''), 'SIN-CODIGO') AS codigo,
-                m.nombre AS descripcion,
-                ed.precio,
-                COALESCE(
-                    STR_TO_DATE(sd.fecha, '%Y-%m-%d %H:%i:%s'),
-                    STR_TO_DATE(sd.fecha, '%Y-%m-%d'),
-                    STR_TO_DATE(sd.fecha, '%d/%m/%Y')
-                ) AS fecha_movimiento,
-                0 AS entrada,
-                sd.cantidad_salida AS salida,
-                0 AS monto_entrada,
-                (sd.cantidad_salida * ed.precio) AS monto_salida
-            FROM salidas_detalle sd
-            INNER JOIN entradas_detalle ed ON ed.id = sd.id_entrada_detalle
-            INNER JOIN materiales m ON m.id = ed.id_material
-            LEFT JOIN objeto_especifico oe ON oe.id = m.id_objespecifico
-        )
+    WITH movimientos AS (
 
         SELECT
-            id_material,
-            codigo,
-            descripcion,
-            MAX(precio) AS precio,
+            ed.id_material,
+            COALESCE(NULLIF(oe.codigo, ''), 'SIN-CODIGO') AS codigo,
+            m.nombre AS descripcion,
+            ed.precio,
+            e.fecha AS fecha_movimiento,
+            ed.cantidad_inicial AS entrada,
+            0 AS salida,
+            (ed.cantidad_inicial * ed.precio) AS monto_entrada,
+            0 AS monto_salida
+        FROM entradas_detalle ed
+        INNER JOIN entradas e ON e.id = ed.id_entradas
+        INNER JOIN materiales m ON m.id = ed.id_material
+        LEFT JOIN objeto_especifico oe ON oe.id = m.id_objespecifico
 
-            SUM(CASE WHEN fecha_movimiento < ? THEN entrada - salida ELSE 0 END) AS saldo_inicial_cant,
+        UNION ALL
 
-            SUM(CASE WHEN fecha_movimiento >= ? AND fecha_movimiento <= ? THEN entrada ELSE 0 END) AS entradas_mes_cant,
+        SELECT
+            ed.id_material,
+            COALESCE(NULLIF(oe.codigo, ''), 'SIN-CODIGO') AS codigo,
+            m.nombre AS descripcion,
+            ed.precio,
+            COALESCE(
+                STR_TO_DATE(sd.fecha, '%Y-%m-%d %H:%i:%s'),
+                STR_TO_DATE(sd.fecha, '%Y-%m-%d'),
+                STR_TO_DATE(sd.fecha, '%d/%m/%Y')
+            ) AS fecha_movimiento,
+            0 AS entrada,
+            sd.cantidad_salida AS salida,
+            0 AS monto_entrada,
+            (sd.cantidad_salida * ed.precio) AS monto_salida
+        FROM salidas_detalle sd
+        INNER JOIN entradas_detalle ed ON ed.id = sd.id_entrada_detalle
+        INNER JOIN materiales m ON m.id = ed.id_material
+        LEFT JOIN objeto_especifico oe ON oe.id = m.id_objespecifico
+    )
 
-            SUM(CASE WHEN fecha_movimiento >= ? AND fecha_movimiento <= ? THEN salida ELSE 0 END) AS salidas_mes_cant,
+    SELECT
+        id_material,
+        codigo,
+        descripcion,
+        MAX(precio) AS precio,
 
-            (
-                SUM(CASE WHEN fecha_movimiento < ? THEN entrada - salida ELSE 0 END)
-                + SUM(CASE WHEN fecha_movimiento >= ? AND fecha_movimiento <= ? THEN entrada ELSE 0 END)
-                - SUM(CASE WHEN fecha_movimiento >= ? AND fecha_movimiento <= ? THEN salida ELSE 0 END)
-            ) AS saldo_final_cant,
+        SUM(CASE WHEN fecha_movimiento < ? THEN entrada - salida ELSE 0 END) AS saldo_inicial_cant,
 
-            SUM(CASE WHEN fecha_movimiento < ? THEN monto_entrada - monto_salida ELSE 0 END) AS saldo_inicial_money,
+        SUM(CASE WHEN fecha_movimiento >= ? AND fecha_movimiento <= ? THEN entrada ELSE 0 END) AS entradas_mes_cant,
 
-            SUM(CASE WHEN fecha_movimiento >= ? AND fecha_movimiento <= ? THEN monto_entrada ELSE 0 END) AS entradas_mes_money,
+        SUM(CASE WHEN fecha_movimiento >= ? AND fecha_movimiento <= ? THEN salida ELSE 0 END) AS salidas_mes_cant,
 
-            SUM(CASE WHEN fecha_movimiento >= ? AND fecha_movimiento <= ? THEN monto_salida ELSE 0 END) AS salidas_mes_money,
+        (
+            SUM(CASE WHEN fecha_movimiento < ? THEN entrada - salida ELSE 0 END)
+            + SUM(CASE WHEN fecha_movimiento >= ? AND fecha_movimiento <= ? THEN entrada ELSE 0 END)
+            - SUM(CASE WHEN fecha_movimiento >= ? AND fecha_movimiento <= ? THEN salida ELSE 0 END)
+        ) AS saldo_final_cant,
 
-            (
-                SUM(CASE WHEN fecha_movimiento < ? THEN monto_entrada - monto_salida ELSE 0 END)
-                + SUM(CASE WHEN fecha_movimiento >= ? AND fecha_movimiento <= ? THEN monto_entrada ELSE 0 END)
-                - SUM(CASE WHEN fecha_movimiento >= ? AND fecha_movimiento <= ? THEN monto_salida ELSE 0 END)
-            ) AS saldo_final_money
+        SUM(CASE WHEN fecha_movimiento < ? THEN monto_entrada - monto_salida ELSE 0 END) AS saldo_inicial_money,
 
-        FROM movimientos
-        GROUP BY id_material, codigo, descripcion
-        ORDER BY codigo, descripcion
-    ", [
+        SUM(CASE WHEN fecha_movimiento >= ? AND fecha_movimiento <= ? THEN monto_entrada ELSE 0 END) AS entradas_mes_money,
+
+        SUM(CASE WHEN fecha_movimiento >= ? AND fecha_movimiento <= ? THEN monto_salida ELSE 0 END) AS salidas_mes_money,
+
+        (
+            SUM(CASE WHEN fecha_movimiento < ? THEN monto_entrada - monto_salida ELSE 0 END)
+            + SUM(CASE WHEN fecha_movimiento >= ? AND fecha_movimiento <= ? THEN monto_entrada ELSE 0 END)
+            - SUM(CASE WHEN fecha_movimiento >= ? AND fecha_movimiento <= ? THEN monto_salida ELSE 0 END)
+        ) AS saldo_final_money
+
+    FROM movimientos
+    GROUP BY id_material, codigo, descripcion
+    ORDER BY codigo, descripcion
+", [
             // saldo_inicial_cant
             $start->toDateString(),
 
@@ -588,67 +584,67 @@ class ReportesController extends Controller
         ]);
 
         $rows = array_values(array_filter($rows, function ($r) {
-            $inicial  = (float) ($r->saldo_inicial_cant ?? 0);
-            $entradas = (float) ($r->entradas_mes_cant ?? 0);
-            $salidas  = (float) ($r->salidas_mes_cant ?? 0);
-            $final    = (float) ($r->saldo_final_cant ?? 0);
+            $inicial = (float)($r->saldo_inicial_cant ?? 0);
+            $entradas = (float)($r->entradas_mes_cant ?? 0);
+            $salidas = (float)($r->salidas_mes_cant ?? 0);
+            $final = (float)($r->saldo_final_cant ?? 0);
 
             return !($inicial == 0 && $entradas == 0 && $salidas == 0 && $final == 0);
         }));
 
         $totales = [
-            'inicial_cant'   => 0,
-            'entradas_cant'  => 0,
-            'salidas_cant'   => 0,
-            'final_cant'     => 0,
-            'inicial_money'  => 0.0,
+            'inicial_cant' => 0,
+            'entradas_cant' => 0,
+            'salidas_cant' => 0,
+            'final_cant' => 0,
+            'inicial_money' => 0.0,
             'entradas_money' => 0.0,
-            'salidas_money'  => 0.0,
-            'final_money'    => 0.0,
+            'salidas_money' => 0.0,
+            'final_money' => 0.0,
         ];
 
         $sumPorCodigo = [];
 
         foreach ($rows as $r) {
-            $totales['inicial_cant']   += (int)   ($r->saldo_inicial_cant  ?? 0);
-            $totales['entradas_cant']  += (int)   ($r->entradas_mes_cant   ?? 0);
-            $totales['salidas_cant']   += (int)   ($r->salidas_mes_cant    ?? 0);
-            $totales['final_cant']     += (int)   ($r->saldo_final_cant    ?? 0);
-            $totales['inicial_money']  += (float) ($r->saldo_inicial_money ?? 0);
-            $totales['entradas_money'] += (float) ($r->entradas_mes_money  ?? 0);
-            $totales['salidas_money']  += (float) ($r->salidas_mes_money   ?? 0);
-            $totales['final_money']    += (float) ($r->saldo_final_money   ?? 0);
+            $totales['inicial_cant'] += (int)($r->saldo_inicial_cant ?? 0);
+            $totales['entradas_cant'] += (int)($r->entradas_mes_cant ?? 0);
+            $totales['salidas_cant'] += (int)($r->salidas_mes_cant ?? 0);
+            $totales['final_cant'] += (int)($r->saldo_final_cant ?? 0);
+            $totales['inicial_money'] += (float)($r->saldo_inicial_money ?? 0);
+            $totales['entradas_money'] += (float)($r->entradas_mes_money ?? 0);
+            $totales['salidas_money'] += (float)($r->salidas_mes_money ?? 0);
+            $totales['final_money'] += (float)($r->saldo_final_money ?? 0);
 
             $codigo = $r->codigo ?? 'SIN-CODIGO';
 
             if (!isset($sumPorCodigo[$codigo])) {
                 $sumPorCodigo[$codigo] = [
-                    'codigo'         => $codigo,
-                    'inicial_cant'   => 0,
-                    'entradas_cant'  => 0,
-                    'salidas_cant'   => 0,
-                    'final_cant'     => 0,
-                    'inicial_money'  => 0.0,
+                    'codigo' => $codigo,
+                    'inicial_cant' => 0,
+                    'entradas_cant' => 0,
+                    'salidas_cant' => 0,
+                    'final_cant' => 0,
+                    'inicial_money' => 0.0,
                     'entradas_money' => 0.0,
-                    'salidas_money'  => 0.0,
-                    'final_money'    => 0.0,
+                    'salidas_money' => 0.0,
+                    'final_money' => 0.0,
                 ];
             }
 
-            $sumPorCodigo[$codigo]['inicial_cant']   += (int)   ($r->saldo_inicial_cant  ?? 0);
-            $sumPorCodigo[$codigo]['entradas_cant']  += (int)   ($r->entradas_mes_cant   ?? 0);
-            $sumPorCodigo[$codigo]['salidas_cant']   += (int)   ($r->salidas_mes_cant    ?? 0);
-            $sumPorCodigo[$codigo]['final_cant']     += (int)   ($r->saldo_final_cant    ?? 0);
-            $sumPorCodigo[$codigo]['inicial_money']  += (float) ($r->saldo_inicial_money ?? 0);
-            $sumPorCodigo[$codigo]['entradas_money'] += (float) ($r->entradas_mes_money  ?? 0);
-            $sumPorCodigo[$codigo]['salidas_money']  += (float) ($r->salidas_mes_money   ?? 0);
-            $sumPorCodigo[$codigo]['final_money']    += (float) ($r->saldo_final_money   ?? 0);
+            $sumPorCodigo[$codigo]['inicial_cant'] += (int)($r->saldo_inicial_cant ?? 0);
+            $sumPorCodigo[$codigo]['entradas_cant'] += (int)($r->entradas_mes_cant ?? 0);
+            $sumPorCodigo[$codigo]['salidas_cant'] += (int)($r->salidas_mes_cant ?? 0);
+            $sumPorCodigo[$codigo]['final_cant'] += (int)($r->saldo_final_cant ?? 0);
+            $sumPorCodigo[$codigo]['inicial_money'] += (float)($r->saldo_inicial_money ?? 0);
+            $sumPorCodigo[$codigo]['entradas_money'] += (float)($r->entradas_mes_money ?? 0);
+            $sumPorCodigo[$codigo]['salidas_money'] += (float)($r->salidas_mes_money ?? 0);
+            $sumPorCodigo[$codigo]['final_money'] += (float)($r->saldo_final_money ?? 0);
         }
 
         // ── mPDF ──────────────────────────────────────────────────────────────
         $mpdf = new \Mpdf\Mpdf([
-            'tempDir'     => sys_get_temp_dir(),
-            'format'      => 'LETTER',
+            'tempDir' => sys_get_temp_dir(),
+            'format' => 'LETTER',
             'orientation' => 'L',
         ]);
 
@@ -667,7 +663,7 @@ class ReportesController extends Controller
                         <img src='{$logoalcaldia}' style='height:38px'>
                     </td>
                     <td style='width:70%; text-align:left; color:#104e8c; font-size:13px; font-weight:bold; line-height:1.3;'>
-                        REPORTE DE INVENTARIO
+                        REPORTE DE MOVIMIENTO DE INVENTARIO
                     </td>
                 </tr>
             </table>
@@ -683,7 +679,7 @@ class ReportesController extends Controller
                 </tr>
                 <tr>
                     <td style='border-right:0.8px solid #000; border-bottom:0.8px solid #000; padding:4px 6px;'><strong>Versión:</strong></td>
-                    <td style='border-bottom:0.8px solid #000; padding:4px 6px; text-align:center;'>000</td>
+                    <td style='border-bottom:0.8px solid #000; padding:4px 6px; text-align:center;'></td>
                 </tr>
                 <tr>
                     <td style='border-right:0.8px solid #000; padding:4px 6px;'><strong>Fecha de vigencia:</strong></td>
@@ -711,8 +707,8 @@ class ReportesController extends Controller
     <thead style='background:#f2f4f8'>
         <tr>
             <th>#</th>
-            <th>Código</th>
-            <th>Descripción / Nombre</th>
+            <th>COD</th>
+            <th>DESCRIPCIÓN</th>
             <th style='text-align:right; width:8%'>PRECIO</th>
             <th style='text-align:right; width:6%'>INICIAL</th>
             <th style='text-align:right; width:7%'>$ INICIAL</th>
@@ -826,7 +822,7 @@ class ReportesController extends Controller
 
             $j = 1;
             foreach ($sumPorCodigo as $s) {
-                $totalSaldoFinalCodigos += (float) $s['final_money'];
+                $totalSaldoFinalCodigos += (float)$s['final_money'];
 
                 $html .= "
         <tr>
@@ -855,21 +851,33 @@ class ReportesController extends Controller
 ";
         }
 
-        // ── Firma ─────────────────────────────────────────────────────────────
+        // ── Firma (única, con salto de página según configuración) ─────────────
         $informacionGeneral = InformacionGeneral::where('id', 1)->first();
-        $margenFirma = $informacionGeneral->px_firmas ?? '40px';
+        $margenFirma = (int)($informacionGeneral->px_firmas ?? 40);
+        $saltoPagina = (bool)($informacionGeneral->salto_pagina ?? false);
+
+        $estiloSalto = $saltoPagina ? "page-break-before: always;" : "";
 
         $html .= "
-<div style='text-align:center; font-size:13px; margin-top:{$margenFirma};'>
-    F._____________________________<br>
-    <span style='font-weight:bold; font-size:14px;'>Unidad de Tecnologías de la Información</span>
-</div>
-";
+    <div style='{$estiloSalto} padding-top:{$margenFirma}px;'>
+        <table width='100%' style='font-size:13px; text-align:center; border-collapse:collapse;'>
+            <tr>
+                <td style='text-align:center;'>F._____________________________</td>
+            </tr>
+            <tr>
+                <td style='text-align:center; padding-top:20px; font-weight:bold; font-size:14px;'>
+                    Unidad de Tecnologías de la Información
+                </td>
+            </tr>
+        </table>
+    </div>
+    ";
 
         $mpdf->setFooter('Página {PAGENO} de {nb}');
         $mpdf->WriteHTML($html, \Mpdf\HTMLParserMode::HTML_BODY);
         $mpdf->Output();
     }
+
 
 
 
