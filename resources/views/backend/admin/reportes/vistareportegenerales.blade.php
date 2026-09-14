@@ -77,6 +77,13 @@
         }
         .tipo-badge.juntos   { background:#d4edda; color:#155724; }
         .tipo-badge.separado { background:#cce5ff; color:#004085; }
+        .firma-divider {
+            border: none; border-top: 2px solid #f0f0f0; margin: 22px 0 18px 0;
+        }
+        .firma-subtitle {
+            font-size: 12px; font-weight: 700; color: #6b4a1a;
+            text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px;
+        }
     </style>
 
     <section class="content">
@@ -134,6 +141,7 @@
                             <p style="font-size:13px; color:#666; margin-bottom:14px;">
                                 Muestra saldo inicial, entradas, salidas y saldo final de cada material dentro del rango de fechas seleccionado.
                             </p>
+                            <p style="font-size:13px; color:#666; margin-bottom:14px;">"Si el material tuvo todas sus salidas en el mes, sí aparecerá; pero en el siguiente mes ya no aparecerá si ya no tiene unidades"</p>
                             <hr class="divider">
 
                             <div class="fecha-row">
@@ -152,6 +160,44 @@
                                box-shadow: 0 4px 14px rgba(232,142,26,.35); margin-top:0;">
                                 <i class="fas fa-file-pdf"></i> Generar PDF
                             </button>
+
+                            {{-- ══ DISTANCIA PARA FIRMA / SALTO DE PÁGINA ══ --}}
+                            <hr class="firma-divider">
+                            <div class="firma-subtitle">Configuración de Firma en Reporte</div>
+
+                            <div class="fecha-row">
+                                <div class="fecha-box">
+                                    <label for="px_firmas">Distancia para Firma</label>
+                                    <input type="number"
+                                           id="px_firmas"
+                                           class="form-control form-control-sm"
+                                           value="{{ $informacionGeneral->px_firmas }}">
+                                </div>
+                            </div>
+
+                            <div class="mt-2">
+                                <div class="custom-control custom-switch">
+                                    <input type="checkbox"
+                                           class="custom-control-input"
+                                           id="config-salto-pagina"
+                                        {{ ($informacionGeneral->salto_pagina ?? false) ? 'checked' : '' }}>
+
+                                    <label class="custom-control-label"
+                                           for="config-salto-pagina"
+                                           style="font-size: 13px; padding-top: 2px;">
+                                        Salto de página antes de firma
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="mt-3">
+                                <button type="button"
+                                        class="btn btn-primary"
+                                        onclick="guardarConfiguracionFirma()">
+                                    <i class="fas fa-save mr-1"></i>
+                                    Guardar
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -340,6 +386,30 @@
 
             var url = "{{ url('admin/bodega/reportespdf/inicial/final') }}/" + desde + '/' + hasta;
             window.open(url, '_blank');
+        }
+
+        // ── Guardar Distancia para Firma / Salto de Página ─────────────
+        function guardarConfiguracionFirma() {
+            var saltoPagina = $('#config-salto-pagina').is(':checked') ? 1 : 0;
+            var pxFirmas    = $('#px_firmas').val().trim();
+
+            axios.post("{{ route('admin.informacion.actualizar.px') }}", {
+                _token: '{{ csrf_token() }}',
+                salto_pagina: saltoPagina,
+                px_firmas: pxFirmas,
+            })
+                .then(function (response) {
+
+                    if (response.data.success === 1) {
+                        toastr.success('Configuración actualizada correctamente');
+                    } else {
+                        toastr.error('No se pudo actualizar la configuración');
+                    }
+
+                })
+                .catch(function () {
+                    toastr.error('Ocurrió un error al guardar');
+                });
         }
 
         // ── Inicializar Select2 con búsqueda para el select de departamentos ──

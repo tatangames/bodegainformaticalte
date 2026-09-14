@@ -34,8 +34,10 @@ class ReportesController extends Controller
         $arrayMateriales = Materiales::orderBy('nombre', 'ASC')->get();
         $arrayTipos      = TipoSalida::orderBy('id', 'ASC')->get();
 
+        $informacionGeneral = InformacionGeneral::where('id', 1)->first();
+
         return view('backend.admin.reportes.vistareportegenerales',
-            compact('arrayUnidades', 'arrayMateriales', 'arrayTipos'));
+            compact('arrayUnidades', 'arrayMateriales', 'arrayTipos', 'informacionGeneral'));
     }
 
 
@@ -1465,6 +1467,45 @@ class ReportesController extends Controller
         $mpdf->Output();
     }
 
+
+
+    public function actualizarPxInformacionGeneral(Request $request)
+    {
+        $rules = [
+            'salto_pagina'    => 'required|boolean',
+            'px_firmas'       => 'required|numeric',
+        ];
+
+        $validator = Validator::make($request->all(), $rules);
+
+        if ($validator->fails()) {
+            return ['success' => 0];
+        }
+
+        try {
+
+            $info = InformacionGeneral::find(1);
+
+            if (!$info) {
+                return ['success' => 0];
+            }
+
+            $info->salto_pagina    = (int) $request->salto_pagina;
+            $info->px_firmas       = (int) $request->px_firmas;
+
+            $info->save();
+
+            return ['success' => 1];
+
+        } catch (\Throwable $e) {
+
+            Log::error(
+                'actualizarPxInformacionGeneral: ' . $e->getMessage()
+            );
+
+            return ['success' => 99];
+        }
+    }
 
 
 

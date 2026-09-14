@@ -164,8 +164,9 @@ Route::middleware('auth:admin')->group(function () {
         ->name('reporte.pendientes.material');
 
 
-
-
+    // --- ACTUALIZAR DISTANCIA FIRMAS ---
+    Route::post('/admin/informacion/actualizar/px', [ReportesController::class, 'actualizarPxInformacionGeneral'])
+        ->name('admin.informacion.actualizar.px');
 
 
 
