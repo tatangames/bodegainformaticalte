@@ -9,12 +9,13 @@
             <th>#</th>
             <th>Fecha</th>
             <th>Material</th>
+            <th>Unidad</th>
             <th>Tipo Salida</th>
             <th>Departamento</th>
             <th>N° Solicitud</th>
             <th class="text-center">Cantidad</th>
-            <th class="text-right">Precio Unit.</th>  {{-- NUEVO --}}
-            <th class="text-right">Subtotal</th>      {{-- NUEVO --}}
+            <th class="text-right">Precio Unit.</th>
+            <th class="text-right">Subtotal</th>
             <th class="text-center">Estado</th>
             <th class="text-center">Entregas</th>
             <th class="text-center">Acciones</th>
@@ -24,19 +25,20 @@
         @forelse($arraySalidas as $key => $salida)
             <tr>
                 <td>{{ $key + 1 }}</td>
-                <td>{{ \Carbon\Carbon::parse($salida->fecha)->format('d-m-Y') }}</td>
+                <td data-order="{{ \Carbon\Carbon::parse($salida->fecha)->format('Ymd') }}">
+                    {{ \Carbon\Carbon::parse($salida->fecha)->format('d-m-Y') }}
+                </td>
                 <td>{{ $salida->material }}</td>
+                <td>{{ $salida->unidad ?? '—' }}</td>
                 <td>{{ $salida->tipo_salida ?? '—' }}</td>
                 <td>{{ $salida->departamento ?? '—' }}</td>
                 <td>{{ $salida->numero_solicitud ?? '—' }}</td>
                 <td class="text-center">{{ $salida->cantidad_salida }}</td>
 
-                {{-- NUEVO: Precio unitario --}}
                 <td class="text-right">
                     ${{ number_format($salida->precio ?? 0, 2) }}
                 </td>
 
-                {{-- NUEVO: Subtotal --}}
                 <td class="text-right">
                     ${{ number_format($salida->subtotal ?? 0, 2) }}
                 </td>
@@ -76,18 +78,17 @@
             </tr>
         @empty
             <tr>
-                <td colspan="12" class="text-center text-muted py-3">
+                <td colspan="13" class="text-center text-muted py-3">
                     No se encontraron registros con los filtros aplicados.
                 </td>
             </tr>
         @endforelse
         </tbody>
 
-        {{-- NUEVO: Fila de total general --}}
         @if($arraySalidas->count() > 0)
             <tfoot>
-            <tr class="table-dark font-weight-bold">
-                <td colspan="8" class="text-right">TOTAL GENERAL:</td>
+            <tr class="fila-total-general font-weight-bold">
+                <td colspan="9" class="text-right">TOTAL GENERAL:</td>
                 <td class="text-right">
                     ${{ number_format($totalGeneral, 2) }}
                 </td>
@@ -97,3 +98,13 @@
         @endif
     </table>
 </div>
+
+@push('styles')
+    <style>
+        #tabla-historial tfoot .fila-total-general td {
+            background-color: #212529 !important;
+            color: #ffffff !important;
+            border-color: #454d55 !important;
+        }
+    </style>
+@endpush

@@ -310,9 +310,10 @@ class HistorialController extends Controller
         $arraySalidas = DB::table('salidas_detalle as sd')
             ->join('entradas_detalle as ed', 'ed.id', '=', 'sd.id_entrada_detalle')
             ->join('materiales as m', 'm.id', '=', 'ed.id_material')
+            ->leftJoin('unidadmedida as um', 'um.id', '=', 'm.id_medida') // ← NUEVO
             ->leftJoin('tipo_salida as ts', 'ts.id', '=', 'sd.id_tiposalida')
             ->leftJoin('departamentos as dep', 'dep.id', '=', 'sd.id_departamento')
-            ->leftJoin('objeto_especifico as oe', 'oe.id', '=', 'm.id_objespecifico') // ← ajusta la FK según tu schema
+            ->leftJoin('objeto_especifico as oe', 'oe.id', '=', 'm.id_objespecifico')
             ->select(
                 'sd.id',
                 'sd.fecha',
@@ -321,35 +322,22 @@ class HistorialController extends Controller
                 'sd.cantidad_salida',
                 'sd.estado',
                 'm.nombre as material',
+                'um.nombre as unidad',           // ← NUEVO
                 'ts.nombre as tipo_salida',
                 'dep.nombre as departamento',
                 'ed.precio',
-                'oe.codigo as objeto_codigo',       // ← NUEVO
-                'oe.nombre as objeto_nombre',        // ← NUEVO
+                'oe.codigo as objeto_codigo',
+                'oe.nombre as objeto_nombre',
                 DB::raw('(sd.cantidad_salida * ed.precio) as subtotal'),
                 DB::raw('(SELECT COUNT(*) FROM salidas_detalle_entregas WHERE id_salida_detalle = sd.id) as total_entregas')
             )
-            ->when($request->tiposalida, fn($q) =>
-            $q->where('sd.id_tiposalida', $request->tiposalida)
-            )
-            ->when($request->departamento, fn($q) =>
-            $q->where('sd.id_departamento', $request->departamento)
-            )
-            ->when($request->fecha_desde, fn($q) =>
-            $q->whereDate('sd.fecha', '>=', $request->fecha_desde)
-            )
-            ->when($request->fecha_hasta, fn($q) =>
-            $q->whereDate('sd.fecha', '<=', $request->fecha_hasta)
-            )
-            ->when($request->material, fn($q) =>
-            $q->where('m.nombre', 'LIKE', '%' . $request->material . '%')
-            )
-            ->when($request->solicitud, fn($q) =>
-            $q->where('sd.numero_solicitud', 'LIKE', '%' . $request->solicitud . '%')
-            )
-            ->when($request->objeto_especifico, fn($q) =>   // ← NUEVO filtro
-            $q->where('oe.id', $request->objeto_especifico)
-            )
+            ->when($request->tiposalida, fn($q) => $q->where('sd.id_tiposalida', $request->tiposalida))
+            ->when($request->departamento, fn($q) => $q->where('sd.id_departamento', $request->departamento))
+            ->when($request->fecha_desde, fn($q) => $q->whereDate('sd.fecha', '>=', $request->fecha_desde))
+            ->when($request->fecha_hasta, fn($q) => $q->whereDate('sd.fecha', '<=', $request->fecha_hasta))
+            ->when($request->material, fn($q) => $q->where('m.nombre', 'LIKE', '%' . $request->material . '%'))
+            ->when($request->solicitud, fn($q) => $q->where('sd.numero_solicitud', 'LIKE', '%' . $request->solicitud . '%'))
+            ->when($request->objeto_especifico, fn($q) => $q->where('oe.id', $request->objeto_especifico))
             ->orderBy('sd.fecha', 'desc')
             ->orderBy('sd.id', 'desc')
             ->get();

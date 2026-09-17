@@ -352,9 +352,10 @@
                 pagingType:   'full_numbers',
                 lengthMenu:   [[50, 100, -1], [50, 100, 'Todo']],
                 // Excluir la columna de acciones del ordenamiento y búsqueda
+                // Índice actualizado de 11 -> 12 por la nueva columna "Unidad"
                 columnDefs: [
-                    { orderable: false, targets: [11] },
-                    { searchable: false, targets: [11] }
+                    { orderable: false, targets: [12] },
+                    { searchable: false, targets: [12] }
                 ],
                 language: {
                     sProcessing:   'Procesando...',
@@ -416,7 +417,7 @@
         function limpiarFiltros() {
             $('#filtro-tiposalida').val('').trigger('change');
             $('#filtro-departamento').val('').trigger('change');
-            $('#filtro-objeto').val('').trigger('change');   // ← NUEVO
+            $('#filtro-objeto').val('').trigger('change');
             $('#filtro-fecha-desde').val('');
             $('#filtro-fecha-hasta').val('');
             $('#filtro-material').val('');
