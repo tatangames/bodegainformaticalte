@@ -90,6 +90,80 @@
         <div class="container-fluid">
             <div class="row">
 
+                {{-- ══ ENTRADAS ══ --}}
+                <div class="col-md-6">
+                    <div class="reporte-card">
+                        <div class="reporte-header entradas">
+                            <i class="fas fa-arrow-circle-down"></i>
+                            <h5>Reporte de Entradas de Materiales</h5>
+                        </div>
+                        <div class="reporte-body">
+                            <p style="font-size:13px; color:#666; margin-bottom:14px;">
+                                Materiales ingresados en el rango de fechas seleccionado.
+                            </p>
+                            <hr class="divider">
+
+                            <div class="fecha-row">
+                                <div class="fecha-box">
+                                    <label>Desde</label>
+                                    <input type="date" class="form-control" id="entrada-desde">
+                                </div>
+                                <div class="fecha-box">
+                                    <label>Hasta</label>
+                                    <input type="date" class="form-control" id="entrada-hasta">
+                                </div>
+                            </div>
+
+                            <label class="field-label mt-2">Tipo de Reporte</label>
+                            <select class="form-control" id="tipo-entrada" style="width:100%">
+                                <option value="1">Juntos — materiales iguales del mismo precio se suman</option>
+                                <option value="2">Separado — cada entrada por separado</option>
+                            </select>
+
+                            <button type="button" onclick="generarPdfEntrada()" class="btn-pdf verde">
+                                <i class="fas fa-file-pdf"></i> Generar PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- ══ SALIDAS ══ --}}
+                <div class="col-md-6">
+                    <div class="reporte-card">
+                        <div class="reporte-header salidas">
+                            <i class="fas fa-arrow-circle-up"></i>
+                            <h5>Reporte de Salidas de Materiales</h5>
+                        </div>
+                        <div class="reporte-body">
+                            <p style="font-size:13px; color:#666; margin-bottom:14px;">
+                                Materiales entregados en el rango de fechas seleccionado.
+                            </p>
+                            <hr class="divider">
+
+                            <div class="fecha-row">
+                                <div class="fecha-box">
+                                    <label>Desde</label>
+                                    <input type="date" class="form-control" id="salida-desde">
+                                </div>
+                                <div class="fecha-box">
+                                    <label>Hasta</label>
+                                    <input type="date" class="form-control" id="salida-hasta">
+                                </div>
+                            </div>
+
+                            <label class="field-label mt-2">Tipo de Reporte</label>
+                            <select class="form-control" id="tipo-salida" style="width:100%">
+                                <option value="1">Juntos — materiales iguales del mismo precio se suman</option>
+                                <option value="2">Separado — cada salida por separado</option>
+                            </select>
+
+                            <button type="button" onclick="generarPdfSalida()" class="btn-pdf rojo">
+                                <i class="fas fa-file-pdf"></i> Generar PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 {{-- ══ INVENTARIO ACTUAL ══ --}}
                 <div class="col-md-4">
                     <div class="reporte-card">
@@ -345,8 +419,6 @@
                     </div>
                 </div>
 
-
-
             </div>
         </div>
     </section>
@@ -360,6 +432,22 @@
     <script src="{{ asset('js/jquery.simpleaccordion.js') }}"></script>
     <script src="{{ asset('js/select2.min.js') }}" type="text/javascript"></script>
     <script>
+
+        // ── Reporte de Entradas de Materiales ─────────────────────────────────────────
+        function generarPdfEntrada() {
+            var desde = document.getElementById('entrada-desde').value || 'null';
+            var hasta = document.getElementById('entrada-hasta').value || 'null';
+            var tipo  = document.getElementById('tipo-entrada').value;
+            window.open("{{ url('admin/reporte/quehaentrado/pdf') }}/" + desde + "/" + hasta + "/" + tipo, '_blank');
+        }
+
+        // ── Reporte de Salidas de Materiales ──────────────────────────────────────────
+        function generarPdfSalida() {
+            var desde = document.getElementById('salida-desde').value || 'null';
+            var hasta = document.getElementById('salida-hasta').value || 'null';
+            var tipo  = document.getElementById('tipo-salida').value;
+            window.open("{{ url('admin/reporte/quehasalido/pdf') }}/" + desde + "/" + hasta + "/" + tipo, '_blank');
+        }
 
         function generarPdfInventario() {
             var conteo     = document.getElementById('toggle-conteo-inventario').checked ? 1 : 0;
@@ -499,14 +587,6 @@
         }
 
 
-
-
-
-
-
-
-
-
         // ── Select2 para material pendiente ──────────────────────────────────────────
         $(document).ready(function () {
             $('.select2-material-pendiente').select2({
@@ -543,11 +623,6 @@
 
             window.open(url, '_blank');
         }
-
-
-
-
-
 
     </script>
 @endsection
