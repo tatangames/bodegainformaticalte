@@ -1506,11 +1506,12 @@ class ReportesController extends Controller
 
 
 
-    public function pdfQueHaEntradoProyectos($desde, $hasta, $tipo = 2)
+    public function pdfQueHaEntradoProyectos($desde, $hasta, $tipo = 2, $material = 0)
     {
         $sinFecha     = ($desde === 'null' || $desde === '' || $hasta === 'null' || $hasta === '');
         $fechaHoy     = Carbon::now('America/El_Salvador')->format('d-m-Y');
         $logoalcaldia = 'images/logo.png';
+        $material     = (int) $material;
 
         if (!$sinFecha) {
             $start      = date('Y-m-d 00:00:00', strtotime($desde));
@@ -1518,6 +1519,13 @@ class ReportesController extends Controller
             $fechaLabel = date('d-m-Y', strtotime($desde)) . '  —  ' . date('d-m-Y', strtotime($hasta));
         } else {
             $fechaLabel = 'Todas las fechas';
+        }
+
+        // ── Etiqueta del material seleccionado ────────────────────────────
+        $materialLabel = 'Todos los materiales';
+        if ($material > 0) {
+            $matInfo       = \App\Models\Materiales::find($material);
+            $materialLabel = $matInfo->nombre ?? 'Material no encontrado';
         }
 
         $encabezado = "
@@ -1557,6 +1565,10 @@ class ReportesController extends Controller
         <td style='width:15%; border:0.8px solid #ccc; padding:6px 8px; font-size:11px; font-weight:bold; background:#f5f5f5; text-align:center;'>FECHA</td>
         <td style='width:20%; border:0.8px solid #ccc; padding:6px 8px; font-size:11px; text-align:center;'>$fechaHoy</td>
     </tr>
+    <tr>
+        <td style='border:0.8px solid #ccc; padding:6px 8px; font-size:11px; font-weight:bold; background:#f5f5f5;'>MATERIAL</td>
+        <td colspan='3' style='border:0.8px solid #ccc; padding:6px 8px; font-size:11px;'>$materialLabel</td>
+    </tr>
 </table>";
 
         $granTotal = 0;
@@ -1564,6 +1576,17 @@ class ReportesController extends Controller
 
         // ── Acumulador para el resumen de Objetos Específicos ─────────────────
         $resumenObjEsp = [];
+
+        // ── Carga del detalle (filtrado por material si aplica) ───────────────
+        $cargaDetalle = function ($q) use ($material) {
+            if ($material > 0) {
+                $q->where('id_material', $material);
+            }
+            $q->with([
+                'material.unidadMedida',
+                'material.objetoEspecifico',
+            ]);
+        };
 
         // ── CABECERA COLUMNAS ─────────────────────────────────────────────
         $theadEntradas = "
@@ -1585,10 +1608,12 @@ class ReportesController extends Controller
         // ════════════════════════════════════════════════════════════════
         if ($tipo == 1) {
 
-            $query = Entradas::with([
-                'detalle.material.unidadMedida',
-                'detalle.material.objetoEspecifico',
-            ]);
+            $query = Entradas::with(['detalle' => $cargaDetalle]);
+            if ($material > 0) {
+                $query->whereHas('detalle', function ($q) use ($material) {
+                    $q->where('id_material', $material);
+                });
+            }
             if (!$sinFecha) $query->whereBetween('fecha', [$start, $end]);
             $arrayEntradas = $query->orderBy('fecha', 'ASC')->get();
 
@@ -1690,9 +1715,13 @@ class ReportesController extends Controller
             $query = Entradas::with([
                 'tipoCompra',
                 'proveedor',
-                'detalle.material.unidadMedida',
-                'detalle.material.objetoEspecifico',
+                'detalle' => $cargaDetalle,
             ]);
+            if ($material > 0) {
+                $query->whereHas('detalle', function ($q) use ($material) {
+                    $q->where('id_material', $material);
+                });
+            }
             if (!$sinFecha) $query->whereBetween('fecha', [$start, $end]);
             $arrayEntradas = $query->orderBy('fecha', 'ASC')->get();
 
@@ -1844,7 +1873,6 @@ class ReportesController extends Controller
         $mpdf->WriteHTML($tabla, 2);
         $mpdf->Output('entradas_' . date('Ymd_His') . '.pdf', 'I');
     }
-
 
 
 

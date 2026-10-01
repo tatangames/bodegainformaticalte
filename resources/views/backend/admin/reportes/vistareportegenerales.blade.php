@@ -114,7 +114,15 @@
                                 </div>
                             </div>
 
-                            <label class="field-label mt-2">Tipo de Reporte</label>
+                            <label class="field-label mt-2">Material</label>
+                            <select class="form-control select2-material-entrada" id="entrada-material" style="width:100%">
+                                <option value="0">-- Todos los materiales --</option>
+                                @foreach($arrayMateriales as $mat)
+                                    <option value="{{ $mat->id }}">{{ $mat->nombre }}</option>
+                                @endforeach
+                            </select>
+
+                            <label class="field-label mt-3">Tipo de Reporte</label>
                             <select class="form-control" id="tipo-entrada" style="width:100%">
                                 <option value="1">Juntos — materiales iguales del mismo precio se suman</option>
                                 <option value="2">Separado — cada entrada por separado</option>
@@ -433,13 +441,33 @@
     <script src="{{ asset('js/select2.min.js') }}" type="text/javascript"></script>
     <script>
 
+        // ── Select2 para material en reporte de entradas ──────────────────────────────
+        $(document).ready(function () {
+            $('.select2-material-entrada').select2({
+                theme: 'bootstrap-5',
+                language: {
+                    noResults: function () { return "No se encontraron resultados"; },
+                    searching: function () { return "Buscando..."; }
+                }
+            });
+        });
+
         // ── Reporte de Entradas de Materiales ─────────────────────────────────────────
         function generarPdfEntrada() {
-            var desde = document.getElementById('entrada-desde').value || 'null';
-            var hasta = document.getElementById('entrada-hasta').value || 'null';
-            var tipo  = document.getElementById('tipo-entrada').value;
-            window.open("{{ url('admin/reporte/quehaentrado/pdf') }}/" + desde + "/" + hasta + "/" + tipo, '_blank');
+            var desde    = document.getElementById('entrada-desde').value || 'null';
+            var hasta    = document.getElementById('entrada-hasta').value || 'null';
+            var tipo     = document.getElementById('tipo-entrada').value;
+            var material = $('#entrada-material').val() || 0;
+
+            if (desde !== 'null' && hasta !== 'null' && desde > hasta) {
+                toastr.error('La fecha "desde" no puede ser mayor que "hasta"');
+                return;
+            }
+
+            window.open("{{ url('admin/reporte/quehaentrado/pdf') }}/" + desde + "/" + hasta + "/" + tipo + "/" + material, '_blank');
         }
+
+
 
         // ── Reporte de Salidas de Materiales ──────────────────────────────────────────
         function generarPdfSalida() {
