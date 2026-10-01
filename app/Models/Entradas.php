@@ -13,7 +13,7 @@ class Entradas extends Model
 
     protected $fillable = [
         'id_tipocompra',
-        'd_proveedor',
+        'id_proveedor',   // antes estaba 'd_proveedor'
         'fecha',
         'descripcion',
         'lote',

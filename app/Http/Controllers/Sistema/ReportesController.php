@@ -1688,9 +1688,8 @@ class ReportesController extends Controller
         } else {
 
             $query = Entradas::with([
-                'tipoEntrada',
                 'tipoCompra',
-                'proveedor',                               // ← eager load proveedor
+                'proveedor',
                 'detalle.material.unidadMedida',
                 'detalle.material.objetoEspecifico',
             ]);
@@ -1699,21 +1698,21 @@ class ReportesController extends Controller
 
             foreach ($arrayEntradas as $entrada) {
                 $fechaFmt    = date('d-m-Y', strtotime($entrada->fecha));
-                $tipoEntrada = $entrada->tipoEntrada->nombre   ?? '';
-                $tipoCompra  = $entrada->tipoCompra->nombre    ?? '';
-                $proveedor   = $entrada->proveedor->nombre     ?? '—';   // ← nuevo
-                $factura     = $entrada->factura               ?? '';
-                $descripcion = $entrada->descripcion           ?? '';
+                $tipoCompra  = $entrada->tipoCompra->nombre ?? '';
+                $proveedor   = $entrada->proveedor->nombre  ?? '—';
+                $lote        = $entrada->lote               ?? '';
+                $factura     = $entrada->factura            ?? '';
+                $descripcion = $entrada->descripcion        ?? '';
 
                 $tabla .= "
 <table width='100%' style='border-collapse:collapse; font-family:Arial, sans-serif; margin-bottom:2px; border:0.8px solid #ccc;'>
     <tr>
-        <td style='width:13%; border:0.8px solid #ccc; padding:5px 7px; font-size:11px; font-weight:bold; background:#f5f5f5;'>Fecha</td>
-        <td style='width:20%; border:0.8px solid #ccc; padding:5px 7px; font-size:11px;'>$fechaFmt</td>
-        <td style='width:15%; border:0.8px solid #ccc; padding:5px 7px; font-size:11px; font-weight:bold; background:#f5f5f5;'>Tipo Entrada</td>
-        <td style='width:20%; border:0.8px solid #ccc; padding:5px 7px; font-size:11px;'>$tipoEntrada</td>
-        <td style='width:12%; border:0.8px solid #ccc; padding:5px 7px; font-size:11px; font-weight:bold; background:#f5f5f5;'>Tipo Compra</td>
-        <td style='width:20%; border:0.8px solid #ccc; padding:5px 7px; font-size:11px;'>$tipoCompra</td>
+        <td style='width:15%; border:0.8px solid #ccc; padding:5px 7px; font-size:11px; font-weight:bold; background:#f5f5f5;'>Fecha</td>
+        <td style='width:18%; border:0.8px solid #ccc; padding:5px 7px; font-size:11px;'>$fechaFmt</td>
+        <td style='width:15%; border:0.8px solid #ccc; padding:5px 7px; font-size:11px; font-weight:bold; background:#f5f5f5;'>Tipo Compra</td>
+        <td style='width:22%; border:0.8px solid #ccc; padding:5px 7px; font-size:11px;'>$tipoCompra</td>
+        <td style='width:10%; border:0.8px solid #ccc; padding:5px 7px; font-size:11px; font-weight:bold; background:#f5f5f5;'>Lote</td>
+        <td style='width:20%; border:0.8px solid #ccc; padding:5px 7px; font-size:11px;'>$lote</td>
     </tr>
     <tr>
         <td style='border:0.8px solid #ccc; padding:5px 7px; font-size:11px; font-weight:bold; background:#f5f5f5;'>Factura</td>
