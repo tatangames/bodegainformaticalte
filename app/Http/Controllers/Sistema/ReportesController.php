@@ -1513,6 +1513,10 @@ class ReportesController extends Controller
         $logoalcaldia = 'images/logo.png';
         $material     = (int) $material;
 
+        // Columna Proveedor solo en "Juntos" cuando se eligió un material
+        $conProveedor = ($tipo == 1 && $material > 0);
+        $colspanLabel = $conProveedor ? 4 : 3;
+
         if (!$sinFecha) {
             $start      = date('Y-m-d 00:00:00', strtotime($desde));
             $end        = date('Y-m-d 23:59:59', strtotime($hasta));
@@ -1589,16 +1593,30 @@ class ReportesController extends Controller
         };
 
         // ── CABECERA COLUMNAS ─────────────────────────────────────────────
-        $theadEntradas = "
-<table width='100%' style='border-collapse:collapse; font-family:Arial, sans-serif; margin-bottom:8px; border:0.8px solid #aaa;'>
-    <thead>
-        <tr style='background:#6c757d;'>
+        if ($conProveedor) {
+            $columnasHead = "
+            <td style='font-weight:bold; width:10%; font-size:11px; color:#fff; padding:5px 6px; border:0.8px solid #888;'>Cod. Presu.</td>
+            <td style='font-weight:bold; width:25%; font-size:11px; color:#fff; padding:5px 6px; border:0.8px solid #888;'>Material</td>
+            <td style='font-weight:bold; width:10%; font-size:11px; color:#fff; padding:5px 6px; border:0.8px solid #888;'>Medida</td>
+            <td style='font-weight:bold; width:20%; font-size:11px; color:#fff; padding:5px 6px; border:0.8px solid #888;'>Proveedor</td>
+            <td style='font-weight:bold; width:9%; font-size:11px; color:#fff; padding:5px 6px; border:0.8px solid #888;'>Cantidad</td>
+            <td style='font-weight:bold; width:13%; font-size:11px; color:#fff; padding:5px 6px; border:0.8px solid #888;'>Precio Unit.</td>
+            <td style='font-weight:bold; width:13%; font-size:11px; color:#fff; padding:5px 6px; border:0.8px solid #888;'>Total (\$)</td>";
+        } else {
+            $columnasHead = "
             <td style='font-weight:bold; width:11%; font-size:11px; color:#fff; padding:5px 6px; border:0.8px solid #888;'>Cod. Presu.</td>
             <td style='font-weight:bold; width:32%; font-size:11px; color:#fff; padding:5px 6px; border:0.8px solid #888;'>Material</td>
             <td style='font-weight:bold; width:12%; font-size:11px; color:#fff; padding:5px 6px; border:0.8px solid #888;'>Medida</td>
             <td style='font-weight:bold; width:10%; font-size:11px; color:#fff; padding:5px 6px; border:0.8px solid #888;'>Cantidad</td>
             <td style='font-weight:bold; width:14%; font-size:11px; color:#fff; padding:5px 6px; border:0.8px solid #888;'>Precio Unit.</td>
-            <td style='font-weight:bold; width:14%; font-size:11px; color:#fff; padding:5px 6px; border:0.8px solid #888;'>Total (\$)</td>
+            <td style='font-weight:bold; width:14%; font-size:11px; color:#fff; padding:5px 6px; border:0.8px solid #888;'>Total (\$)</td>";
+        }
+
+        $theadEntradas = "
+<table width='100%' style='border-collapse:collapse; font-family:Arial, sans-serif; margin-bottom:8px; border:0.8px solid #aaa;'>
+    <thead>
+        <tr style='background:#6c757d;'>
+            $columnasHead
         </tr>
     </thead>
     <tbody>";
@@ -1608,7 +1626,10 @@ class ReportesController extends Controller
         // ════════════════════════════════════════════════════════════════
         if ($tipo == 1) {
 
-            $query = Entradas::with(['detalle' => $cargaDetalle]);
+            $query = Entradas::with([
+                'proveedor',
+                'detalle' => $cargaDetalle,
+            ]);
             if ($material > 0) {
                 $query->whereHas('detalle', function ($q) use ($material) {
                     $q->where('id_material', $material);
@@ -1620,19 +1641,27 @@ class ReportesController extends Controller
             $dataArray = [];
 
             foreach ($arrayEntradas as $entrada) {
+                $nombreProveedor = $entrada->proveedor->nombre ?? '—';
+
                 foreach ($entrada->detalle as $det) {
                     $idMat  = $det->id_material;
                     $precio = (float) $det->precio;
                     $clave  = $idMat . '|' . number_format($precio, 4, '.', '');
 
+                    // Con material seleccionado, se separa también por proveedor
+                    if ($conProveedor) {
+                        $clave .= '|' . ($entrada->id_proveedor ?? 0);
+                    }
+
                     if (!isset($dataArray[$clave])) {
                         $dataArray[$clave] = [
-                            'objespec' => $det->material->objetoEspecifico->codigo ?? '—',
-                            'nombre'   => $det->material->nombre ?? '',
-                            'medida'   => $det->material->unidadMedida->nombre ?? '',
-                            'cantidad' => 0,
-                            'total'    => 0,
-                            'precio'   => $precio,
+                            'objespec'  => $det->material->objetoEspecifico->codigo ?? '—',
+                            'nombre'    => $det->material->nombre ?? '',
+                            'medida'    => $det->material->unidadMedida->nombre ?? '',
+                            'proveedor' => $nombreProveedor,
+                            'cantidad'  => 0,
+                            'total'     => 0,
+                            'precio'    => $precio,
                         ];
                     }
                     $dataArray[$clave]['cantidad'] += $det->cantidad_inicial;
@@ -1642,7 +1671,10 @@ class ReportesController extends Controller
 
             usort($dataArray, function ($a, $b) {
                 $cmp = strcmp($a['objespec'], $b['objespec']);
-                return $cmp !== 0 ? $cmp : strcmp($a['nombre'], $b['nombre']);
+                if ($cmp !== 0) return $cmp;
+                $cmp = strcmp($a['nombre'], $b['nombre']);
+                if ($cmp !== 0) return $cmp;
+                return strcmp($a['proveedor'], $b['proveedor']);
             });
 
             $tabla .= $theadEntradas;
@@ -1657,7 +1689,7 @@ class ReportesController extends Controller
                     $montoFmt = number_format($subtotalCodigo, 4);
                     $tabla .= "
         <tr style='background:#e9ecef;'>
-            <td colspan='3' style='font-weight:bold; font-size:11px; text-align:right; padding:4px 6px; border:0.8px solid #bbb;'>SUBTOTAL [{$codigoActual}]</td>
+            <td colspan='{$colspanLabel}' style='font-weight:bold; font-size:11px; text-align:right; padding:4px 6px; border:0.8px solid #bbb;'>SUBTOTAL [{$codigoActual}]</td>
             <td style='font-weight:bold; font-size:11px; padding:4px 6px; border:0.8px solid #bbb;'>$cantFmt</td>
             <td style='background:#e9ecef; border:0.8px solid #bbb;'></td>
             <td style='font-weight:bold; font-size:11px; padding:4px 6px; border:0.8px solid #bbb;'>\$ $montoFmt</td>
@@ -1680,11 +1712,16 @@ class ReportesController extends Controller
                 $precioFmt = number_format($info['precio'], 4);
                 $totalFmt  = number_format($info['total'], 4);
 
+                $celdaProveedor = $conProveedor
+                    ? "<td style='font-size:11px; padding:4px 6px; border:0.8px solid #ccc;'>{$info['proveedor']}</td>"
+                    : '';
+
                 $tabla .= "
         <tr>
             <td style='font-size:11px; padding:4px 6px; border:0.8px solid #ccc;'>{$info['objespec']}</td>
             <td style='font-size:11px; padding:4px 6px; border:0.8px solid #ccc;'>{$info['nombre']}</td>
             <td style='font-size:11px; padding:4px 6px; border:0.8px solid #ccc;'>{$info['medida']}</td>
+            $celdaProveedor
             <td style='font-size:11px; padding:4px 6px; border:0.8px solid #ccc;'>{$info['cantidad']}</td>
             <td style='font-size:11px; padding:4px 6px; border:0.8px solid #ccc;'>\$ $precioFmt</td>
             <td style='font-size:11px; padding:4px 6px; border:0.8px solid #ccc;'>\$ $totalFmt</td>
@@ -1696,7 +1733,7 @@ class ReportesController extends Controller
                 $montoFmt = number_format($subtotalCodigo, 4);
                 $tabla .= "
         <tr style='background:#e9ecef;'>
-            <td colspan='3' style='font-weight:bold; font-size:11px; text-align:right; padding:4px 6px; border:0.8px solid #bbb;'>SUBTOTAL [{$codigoActual}]</td>
+            <td colspan='{$colspanLabel}' style='font-weight:bold; font-size:11px; text-align:right; padding:4px 6px; border:0.8px solid #bbb;'>SUBTOTAL [{$codigoActual}]</td>
             <td style='font-weight:bold; font-size:11px; padding:4px 6px; border:0.8px solid #bbb;'>$cantFmt</td>
             <td style='background:#e9ecef; border:0.8px solid #bbb;'></td>
             <td style='font-weight:bold; font-size:11px; padding:4px 6px; border:0.8px solid #bbb;'>\$ $montoFmt</td>
