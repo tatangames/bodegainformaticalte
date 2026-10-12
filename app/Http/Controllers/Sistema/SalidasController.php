@@ -197,7 +197,7 @@ class SalidasController extends Controller
         if ($listado->isEmpty()) return '';
 
         // Una sola consulta en vez de un find() por cada fila
-        $infoMateriales = Materiales::with(['unidadMedida', 'marca'])
+        $infoMateriales = Materiales::with('unidadMedida')
             ->whereIn('id', $listado->pluck('id_material'))
             ->get()
             ->keyBy('id');
@@ -209,7 +209,7 @@ class SalidasController extends Controller
             if (!$infoMaterial) continue;
 
             $medida = optional($infoMaterial->unidadMedida)->nombre;
-            $marca  = optional($infoMaterial->marca)->nombre;
+            $marca  = $infoMaterial->codigo;
 
             $nombreCompleto = e($infoMaterial->nombre)
                 . ' (' . e($medida) . ')'
@@ -273,12 +273,12 @@ class SalidasController extends Controller
         return [
             'success'        => 1,
             'nombreMaterial' => $infoMaterial->nombre ?? '',
+            'nombreMarca'    => $infoMaterial->codigo ?? '',
             'nombreMedida'   => $infoMedida->nombre   ?? '',
             'arrayIngreso'   => $listado,
             'disponible'     => $listado->isEmpty() ? 1 : 0,
         ];
     }
-
 
 
 // ── Index: listar pendientes ──────────────────────────────────────────────────
