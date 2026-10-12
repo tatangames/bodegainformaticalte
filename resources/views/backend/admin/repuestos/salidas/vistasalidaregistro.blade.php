@@ -225,9 +225,13 @@
                                 <input type="hidden" id="id-material-seleccionado">
 
                                 <div class="form-row mb-3">
-                                    <div class="col-md-9">
+                                    <div class="col-md-6">
                                         <label>Material</label>
                                         <input type="text" disabled class="form-control" id="info-material">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label>Marca</label>
+                                        <input type="text" disabled class="form-control" id="info-marca">
                                     </div>
                                     <div class="col-md-3">
                                         <label>U/M</label>
@@ -398,6 +402,7 @@
 
                     $('#id-material-seleccionado').val(edrop.id);
                     $('#info-material').val(response.data.nombreMaterial);
+                    $('#info-marca').val(response.data.nombreMarca);
                     $('#info-medida').val(response.data.nombreMedida);
 
                     $.each(response.data.arrayIngreso, function (key, val) {
