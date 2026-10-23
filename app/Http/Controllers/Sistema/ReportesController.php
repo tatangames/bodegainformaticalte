@@ -2544,7 +2544,7 @@ class ReportesController extends Controller
                     <td colspan='4' style='{$td} text-align:right; font-weight:bold; font-size:11px;'>Totales del material:</td>
                     <td style='{$td} text-align:center; font-weight:bold; font-size:11px;'>{$totalIngresado}</td>
                     <td style='{$td}'></td>
-                    <td colspan='3' style='{$td} text-align:right; font-weight:bold; font-size:11px;'>Total salido / Existencia: {$existencia}</td>
+                    <td colspan='3' style='{$td} text-align:right; font-weight:bold; font-size:11px;'>Existencia: {$existencia}</td>
                     <td style='{$td} text-align:center; font-weight:bold; font-size:11px;'>{$totalSalido}</td>
                 </tr>
                 </tbody>
