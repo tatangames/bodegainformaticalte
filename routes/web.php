@@ -173,6 +173,11 @@ Route::middleware('auth:admin')->group(function () {
     Route::get('admin/reporte/quehaentrado/pdf/{desde}/{hasta}/{tipo}/{material?}', [ReportesController::class, 'pdfQueHaEntradoProyectos']);
 
 
+
+    Route::get('/admin/reporte/busqueda/pdf', [ReportesController::class, 'reportePDFBusquedaMaterial']);
+
+
+
 }); // end auth
 
 

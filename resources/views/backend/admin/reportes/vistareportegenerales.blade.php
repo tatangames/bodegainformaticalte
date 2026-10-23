@@ -427,6 +427,63 @@
                     </div>
                 </div>
 
+
+                {{-- ══ BÚSQUEDA: INGRESOS Y SALIDAS POR MATERIAL / PROVEEDOR / TIPO COMPRA ══ --}}
+                <div class="col-md-4">
+                    <div class="reporte-card">
+                        <div class="reporte-header" style="background: linear-gradient(135deg, #1a3a6b, #3f6fd1);">
+                            <i class="fas fa-search"></i>
+                            <h5>Ingresos y Salidas por Material</h5>
+                        </div>
+                        <div class="reporte-body">
+                            <p style="font-size:13px; color:#666; margin-bottom:14px;">
+                                Muestra todos los ingresos de los materiales y proveedores seleccionados,
+                                y si tuvieron salidas: fecha de salida y unidad a la que se entregó.
+                            </p>
+                            <hr class="divider">
+
+                            <div style="margin-bottom:12px;">
+                                <label class="field-label">Materiales (uno o varios)</label>
+                                <select id="busq-materiales" class="form-control form-control-sm select2-busq-materiales"
+                                        multiple="multiple" style="width:100%;">
+                                    @foreach($arrayMateriales as $mat)
+                                        <option value="{{ $mat->id }}">{{ $mat->nombre }}</option>
+                                    @endforeach
+                                </select>
+                                <small class="text-muted" style="font-size:11px;">Sin selección = todos los materiales.</small>
+                            </div>
+
+                            <div style="margin-bottom:12px;">
+                                <label class="field-label">Proveedores (uno o varios)</label>
+                                <select id="busq-proveedores" class="form-control form-control-sm select2-busq-proveedores"
+                                        multiple="multiple" style="width:100%;">
+                                    @foreach($arrayProveedores as $prov)
+                                        <option value="{{ $prov->id }}">{{ $prov->nombre }}</option>
+                                    @endforeach
+                                </select>
+                                <small class="text-muted" style="font-size:11px;">Sin selección = todos los proveedores.</small>
+                            </div>
+
+                            <div style="margin-bottom:14px;">
+                                <label class="field-label">Tipo de compra</label>
+                                <select id="busq-tipocompra" class="form-control form-control-sm" style="width:100%;">
+                                    <option value="0">-- Todos --</option>
+                                    @foreach($arrayTipoCompra as $tc)
+                                        <option value="{{ $tc->id }}">{{ $tc->nombre }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <button type="button" onclick="generarReporteBusqueda()"
+                                    class="btn-pdf"
+                                    style="background: linear-gradient(135deg, #1a3a6b, #3f6fd1); color:#fff;
+                           box-shadow: 0 4px 14px rgba(63,111,209,.35); margin-top:0;">
+                                <i class="fas fa-file-pdf"></i> Generar PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     </section>
@@ -451,6 +508,30 @@
                 }
             });
         });
+
+        // ── Select2 múltiple para búsqueda de materiales / proveedores ──
+        $(document).ready(function () {
+            $('.select2-busq-materiales').select2({
+                theme: 'bootstrap-5',
+                placeholder: '-- Todos los materiales --',
+                allowClear: true,
+                language: {
+                    noResults: function () { return "No se encontraron resultados"; },
+                    searching: function () { return "Buscando..."; }
+                }
+            });
+
+            $('.select2-busq-proveedores').select2({
+                theme: 'bootstrap-5',
+                placeholder: '-- Todos los proveedores --',
+                allowClear: true,
+                language: {
+                    noResults: function () { return "No se encontraron resultados"; },
+                    searching: function () { return "Buscando..."; }
+                }
+            });
+        });
+
 
         // ── Reporte de Entradas de Materiales ─────────────────────────────────────────
         function generarPdfEntrada() {
@@ -651,6 +732,22 @@
 
             window.open(url, '_blank');
         }
+
+        // ── Generar reporte de búsqueda ──
+        function generarReporteBusqueda() {
+            var materiales  = $('#busq-materiales').val()  || [];
+            var proveedores = $('#busq-proveedores').val() || [];
+            var tipo        = $('#busq-tipocompra').val()  || 0;
+
+            var params = new URLSearchParams({
+                materiales:  materiales.join(','),
+                proveedores: proveedores.join(','),
+                tipo:        tipo
+            });
+
+            window.open("{{ url('admin/reporte/busqueda/pdf') }}?" + params.toString(), '_blank');
+        }
+
 
     </script>
 @endsection

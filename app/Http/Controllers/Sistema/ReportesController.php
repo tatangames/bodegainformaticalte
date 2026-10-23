@@ -8,8 +8,10 @@ use App\Models\Entradas;
 use App\Models\EntradasDetalle;
 use App\Models\InformacionGeneral;
 use App\Models\Materiales;
+use App\Models\Proveedor;
 use App\Models\SalidasDetalle;
 use App\Models\SalidasDetalleEntregas;
+use App\Models\TipoCompra;
 use App\Models\TipoSalida;
 use App\Models\UnidadMedida;
 use Carbon\Carbon;
@@ -29,11 +31,14 @@ class ReportesController extends Controller
         $arrayUnidades   = Departamentos::orderBy('nombre', 'ASC')->get();
         $arrayMateriales = Materiales::orderBy('nombre', 'ASC')->get();
         $arrayTipos      = TipoSalida::orderBy('id', 'ASC')->get();
+        $arrayProveedores = Proveedor::orderBy('nombre')->get();
+        $arrayTipoCompra  = TipoCompra::orderBy('nombre')->get();
 
         $informacionGeneral = InformacionGeneral::where('id', 1)->first();
 
         return view('backend.admin.reportes.vistareportegenerales',
-            compact('arrayUnidades', 'arrayMateriales', 'arrayTipos', 'informacionGeneral'));
+            compact('arrayUnidades', 'arrayMateriales', 'arrayTipos', 'informacionGeneral', 'arrayProveedores',
+            'arrayTipoCompra'));
     }
 
 
@@ -1303,6 +1308,20 @@ class ReportesController extends Controller
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     public function reportePDFEntregasPendientesPorMaterial($idMat, $desde = '0', $hasta = '0')
     {
         // ── 1. Material ───────────────────────────────────────────────────────
@@ -2323,6 +2342,223 @@ class ReportesController extends Controller
         $mpdf->WriteHTML($resumen, 2);
 
         $mpdf->Output('salidas_' . date('Ymd_His') . '.pdf', 'I');
+    }
+
+
+
+
+
+    public function reportePDFBusquedaMaterial(Request $request)
+    {
+        // ── 1. Filtros ────────────────────────────────────────────────────────
+        $idsMateriales  = array_filter(explode(',', (string) $request->query('materiales', '')));
+        $idsProveedores = array_filter(explode(',', (string) $request->query('proveedores', '')));
+        $idTipoCompra   = (int) $request->query('tipo', 0);
+
+        // ── 2. Ingresos (entradas_detalle) ────────────────────────────────────
+        $query = DB::table('entradas_detalle as ed')
+            ->join('entradas as e', 'e.id', '=', 'ed.id_entradas')
+            ->join('materiales as m', 'm.id', '=', 'ed.id_material')
+            ->leftJoin('unidadmedida as um', 'um.id', '=', 'm.id_medida')
+            ->leftJoin('proveedor as p', 'p.id', '=', 'e.id_proveedor')
+            ->leftJoin('tipo_compra as tc', 'tc.id', '=', 'e.id_tipocompra')
+            ->select(
+                'ed.id as id_entrada_detalle',
+                'ed.id_material',
+                'ed.cantidad_inicial',
+                'ed.precio',
+                'm.nombre as material',
+                'um.nombre as unidad_medida',
+                'e.fecha as fecha_ingreso',
+                'e.lote',
+                'p.nombre as proveedor',
+                'tc.nombre as tipo_compra'
+            );
+
+        if (!empty($idsMateriales)) {
+            $query->whereIn('ed.id_material', $idsMateriales);
+        }
+        if (!empty($idsProveedores)) {
+            $query->whereIn('e.id_proveedor', $idsProveedores);
+        }
+        if ($idTipoCompra > 0) {
+            $query->where('e.id_tipocompra', $idTipoCompra);
+        }
+
+        $ingresos = $query->orderBy('m.nombre')
+            ->orderBy('e.fecha')
+            ->orderBy('ed.id')
+            ->get();
+
+        // ── 3. Salidas de esos ingresos, agrupadas por entrada_detalle ───────
+        $salidasPorEntrada = DB::table('salidas_detalle as sd')
+            ->leftJoin('departamentos as d', 'd.id', '=', 'sd.id_departamento')
+            ->leftJoin('tipo_salida as ts', 'ts.id', '=', 'sd.id_tiposalida')
+            ->whereIn('sd.id_entrada_detalle', $ingresos->pluck('id_entrada_detalle'))
+            ->select(
+                'sd.id_entrada_detalle',
+                'sd.fecha',
+                'sd.cantidad_salida',
+                'sd.numero_solicitud',
+                'd.nombre as departamento',
+                'ts.nombre as tipo_salida'
+            )
+            ->orderBy('sd.fecha')
+            ->orderBy('sd.id')
+            ->get()
+            ->groupBy('id_entrada_detalle');
+
+        // ── 4. Textos de encabezado ───────────────────────────────────────────
+        $fechaHoy = Carbon::now('America/El_Salvador')->format('d-m-Y');
+        $e = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+
+        $filtroMat  = empty($idsMateriales)
+            ? 'Todos'
+            : DB::table('materiales')->whereIn('id', $idsMateriales)->orderBy('nombre')->pluck('nombre')->implode(', ');
+        $filtroProv = empty($idsProveedores)
+            ? 'Todos'
+            : DB::table('proveedor')->whereIn('id', $idsProveedores)->orderBy('nombre')->pluck('nombre')->implode(', ');
+        $filtroTipo = $idTipoCompra > 0
+            ? (DB::table('tipo_compra')->where('id', $idTipoCompra)->value('nombre') ?? 'Todos')
+            : 'Todos';
+
+        // ── 5. PDF ────────────────────────────────────────────────────────────
+        $mpdf = new \Mpdf\Mpdf(['tempDir' => sys_get_temp_dir(), 'format' => 'LETTER-L']);
+        $mpdf->SetTitle('Ingresos y salidas por material');
+        $mpdf->showImageErrors = false;
+
+        $logosantaana = 'images/logo.png';
+        $logoalcaldia = 'images/gobiernologo.jpg';
+
+        $th = "border:1px solid #000; font-size:11px; padding:4px; text-align:center; background:#e9eef7;";
+        $td = "border:1px solid #000; font-size:10px; padding:3px; vertical-align:top;";
+
+        $html = "
+    <table style='width:100%; border-collapse:collapse;'>
+        <tr>
+            <td style='width:15%; text-align:left;'>
+                <img src='$logosantaana' style='max-width:100px; height:auto;'>
+            </td>
+            <td style='width:70%; text-align:center;'>
+                <h1 style='font-size:16px; margin:0; color:#003366; text-transform:uppercase;'>
+                    ALCALDÍA MUNICIPAL DE SANTA ANA NORTE
+                </h1>
+            </td>
+            <td style='width:15%; text-align:right;'>
+
+            </td>
+        </tr>
+    </table>
+    <hr style='border:none; border-top:2px solid #003366; margin:0;'>
+
+    <div style='text-align:center; margin-top:10px;'>
+        <h1 style='font-size:15px; margin:0; color:#000; text-transform:uppercase;'>
+            INGRESOS Y SALIDAS POR MATERIAL
+        </h1>
+        <p style='font-size:11px; margin:4px 0 0 0; color:#444;'>
+            <strong>Materiales:</strong> {$e($filtroMat)}<br>
+            <strong>Proveedores:</strong> {$e($filtroProv)} &nbsp;|&nbsp;
+            <strong>Tipo de compra:</strong> {$e($filtroTipo)} &nbsp;|&nbsp;
+            <strong>Impreso:</strong> {$fechaHoy}
+        </p>
+    </div>
+    ";
+
+        if ($ingresos->isEmpty()) {
+            $html .= "
+        <p style='margin-top:30px; text-align:center; font-size:13px; color:#666;'>
+            No se encontraron ingresos con los filtros seleccionados.
+        </p>";
+        } else {
+            foreach ($ingresos->groupBy('id_material') as $filasMaterial) {
+
+                $primero = $filasMaterial->first();
+
+                $totalIngresado = 0;
+                $totalSalido    = 0;
+
+                $html .= "
+            <div style='margin-top:16px; font-size:12px; font-weight:bold; color:#003366;'>
+                {$e($primero->material)}
+                <span style='font-weight:normal; color:#444;'> — U.M: {$e($primero->unidad_medida ?? '—')}</span>
+            </div>
+            <table style='width:100%; border-collapse:collapse; margin-top:4px;'>
+                <thead>
+                    <tr>
+                        <th style='{$th} width:9%;'>Fecha ingreso</th>
+                        <th style='{$th} width:17%;'>Proveedor</th>
+                        <th style='{$th} width:12%;'>Tipo compra</th>
+                        <th style='{$th} width:8%;'>Lote</th>
+                        <th style='{$th} width:8%;'>Cant. ingreso</th>
+                        <th style='{$th} width:8%;'>Precio</th>
+                        <th style='{$th} width:9%;'>Fecha salida</th>
+                        <th style='{$th} width:17%;'>Unidad / Depto.</th>
+                        <th style='{$th} width:12%;'>Tipo salida</th>
+                        <th style='{$th} width:8%;'>Cant. salida</th>
+                    </tr>
+                </thead>
+                <tbody>";
+
+                foreach ($filasMaterial as $ing) {
+
+                    $salidas = $salidasPorEntrada->get($ing->id_entrada_detalle, collect());
+                    $rowspan = max($salidas->count(), 1);
+
+                    $totalIngresado += $ing->cantidad_inicial;
+
+                    $celdasIngreso = "
+                    <td rowspan='{$rowspan}' style='{$td} text-align:center;'>" . date('d-m-Y', strtotime($ing->fecha_ingreso)) . "</td>
+                    <td rowspan='{$rowspan}' style='{$td} text-align:left;'>{$e($ing->proveedor ?? '—')}</td>
+                    <td rowspan='{$rowspan}' style='{$td} text-align:center;'>{$e($ing->tipo_compra ?? '—')}</td>
+                    <td rowspan='{$rowspan}' style='{$td} text-align:center;'>{$e($ing->lote ?: '—')}</td>
+                    <td rowspan='{$rowspan}' style='{$td} text-align:center;'>{$ing->cantidad_inicial}</td>
+                    <td rowspan='{$rowspan}' style='{$td} text-align:right;'>$" . number_format($ing->precio, 4) . "</td>";
+
+                    if ($salidas->isEmpty()) {
+                        $html .= "
+                    <tr>
+                        {$celdasIngreso}
+                        <td colspan='4' style='{$td} text-align:center; color:#888;'>Sin salidas</td>
+                    </tr>";
+                        continue;
+                    }
+
+                    foreach ($salidas as $i => $sal) {
+                        $totalSalido += $sal->cantidad_salida;
+
+                        $html .= "<tr>";
+                        if ($i === 0) {
+                            $html .= $celdasIngreso;
+                        }
+                        $html .= "
+                        <td style='{$td} text-align:center;'>" . date('d-m-Y', strtotime($sal->fecha)) . "</td>
+                        <td style='{$td} text-align:left;'>{$e($sal->departamento ?? 'Sin unidad')}</td>
+                        <td style='{$td} text-align:center;'>{$e($sal->tipo_salida ?? '—')}</td>
+                        <td style='{$td} text-align:center;'>{$sal->cantidad_salida}</td>
+                    </tr>";
+                    }
+                }
+
+                $existencia = $totalIngresado - $totalSalido;
+
+                $html .= "
+                <tr>
+                    <td colspan='4' style='{$td} text-align:right; font-weight:bold; font-size:11px;'>Totales del material:</td>
+                    <td style='{$td} text-align:center; font-weight:bold; font-size:11px;'>{$totalIngresado}</td>
+                    <td style='{$td}'></td>
+                    <td colspan='3' style='{$td} text-align:right; font-weight:bold; font-size:11px;'>Total salido / Existencia: {$existencia}</td>
+                    <td style='{$td} text-align:center; font-weight:bold; font-size:11px;'>{$totalSalido}</td>
+                </tr>
+                </tbody>
+            </table>";
+            }
+        }
+
+        $stylesheet = file_get_contents('css/cssbodega.css');
+        $mpdf->WriteHTML($stylesheet, 1);
+        $mpdf->setFooter('Página: {PAGENO}/{nb}');
+        $mpdf->WriteHTML($html, 2);
+        $mpdf->Output();
     }
 
 }
