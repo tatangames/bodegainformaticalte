@@ -2456,8 +2456,6 @@ class ReportesController extends Controller
             INGRESOS Y SALIDAS POR MATERIAL
         </h1>
         <p style='font-size:11px; margin:4px 0 0 0; color:#444;'>
-            <strong>Materiales:</strong> {$e($filtroMat)}<br>
-            <strong>Proveedores:</strong> {$e($filtroProv)} &nbsp;|&nbsp;
             <strong>Tipo de compra:</strong> {$e($filtroTipo)} &nbsp;|&nbsp;
             <strong>Impreso:</strong> {$fechaHoy}
         </p>
